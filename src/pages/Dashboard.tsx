@@ -1,0 +1,482 @@
+import clsx from 'clsx'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowUpRight, Check, Clock, Coins, Copy, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LogOut, Minus, PencilLine, Phone, Plus, Rocket, Send, Swords, Unplug, Wallet as WalletIcon, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import AnimatedNumber from '../components/AnimatedNumber'
+import { confetti } from '../components/Confetti'
+import { Page } from '../components/Layout'
+import Modal from '../components/Modal'
+import OutcomeModal from '../components/Outcome'
+import { Scramble } from '../components/PhoneReveal'
+import ProfilePhoto from '../components/ProfilePhoto'
+import { useToast } from '../components/Toast'
+import { EXTRA_REQUEST_COST, MIN_WITHDRAW, REJECT_REWARD, api, dailyInfo, selectMe, useStore } from '../lib/store'
+import type { PartnerRequest, Profile, Wallet } from '../lib/types'
+
+function timeAgo(t: number) {
+  const s = Math.floor((Date.now() - t) / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+function useResetCountdown() {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const next = new Date(now)
+  next.setUTCHours(24, 0, 0, 0)
+  const d = next.getTime() - now
+  const h = Math.floor(d / 3600000)
+  const m = Math.floor((d % 3600000) / 60000)
+  const s = Math.floor((d % 60000) / 1000)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+function StatTile({ icon: Icon, label, value, tone, hint, delay = 0 }: { icon: typeof Flame; label: string; value: number; tone: string; hint: string; delay?: number }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} whileHover={{ y: -4 }} className="card relative overflow-hidden p-4 sm:p-5">
+      <div className={clsx('absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-20 blur-2xl', tone.replace('text-', 'bg-'))} />
+      <Icon className={clsx('h-5 w-5', tone)} />
+      <p className="mt-3 font-display text-3xl font-extrabold sm:text-4xl">
+        <AnimatedNumber value={value} />
+      </p>
+      <p className="text-sm font-semibold">{label}</p>
+      <p className="text-xs text-white/40">{hint}</p>
+    </motion.div>
+  )
+}
+
+function Ring({ left, limit }: { left: number; limit: number }) {
+  const r = 52
+  const c = 2 * Math.PI * r
+  const pct = limit ? left / limit : 0
+  return (
+    <div className="relative h-36 w-36 shrink-0">
+      <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+        <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="10" />
+        <motion.circle
+          cx="60"
+          cy="60"
+          r={r}
+          fill="none"
+          stroke="url(#ring)"
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          initial={{ strokeDashoffset: c }}
+          animate={{ strokeDashoffset: c * (1 - pct) }}
+          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+        />
+        <defs>
+          <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#ff7a1a" />
+            <stop offset="1" stopColor="#ff4d8d" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">
+        <div>
+          <p className="font-display text-4xl font-extrabold leading-none">{left}</p>
+          <p className="mt-1 text-[11px] text-white/50">of {limit} left</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type Tab = 'incoming' | 'sent' | 'matches' | 'ls'
+
+export default function Dashboard() {
+  const s = useStore((x) => x)
+  const me = useStore(selectMe)!
+  const nav = useNavigate()
+  const toast = useToast()
+  const countdown = useResetCountdown()
+  const [tab, setTab] = useState<Tab>('incoming')
+  const [buyN, setBuyN] = useState(1)
+  const [walletOpen, setWalletOpen] = useState(false)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
+  const [amount, setAmount] = useState('')
+  const [busy, setBusy] = useState<string | false>(false)
+  const [outcome, setOutcome] = useState<PartnerRequest | null>(null)
+
+  const daily = dailyInfo(s, me.id)
+  const balance = s.balances[me.id] ?? 0
+  const wallet = s.wallets[me.id] ?? null
+  const ledger = s.ledger[me.id] ?? []
+
+  const { incoming, sent, matches, ls, pendingSent } = useMemo(() => {
+    const mine = s.requests.filter((r) => r.from === me.id || r.to === me.id)
+    return {
+      incoming: mine.filter((r) => r.to === me.id && r.status === 'pending'),
+      sent: mine.filter((r) => r.from === me.id),
+      matches: mine.filter((r) => r.status === 'accepted'),
+      ls: mine.filter((r) => r.from === me.id && r.status === 'rejected'),
+      pendingSent: mine.filter((r) => r.from === me.id && r.status === 'pending').length,
+    }
+  }, [s.requests, me.id])
+
+  // Surface answers that came in while you were away (or while you're watching).
+  const unseen = useMemo(() => sent.filter((r) => r.status !== 'pending' && !r.seen), [sent])
+  useEffect(() => {
+    if (!unseen.length || outcome) return
+    setOutcome(unseen[0])
+    api.markSeen(unseen.map((r) => r.id))
+  }, [unseen, outcome])
+
+  const P = (id: string) => s.profiles[id] as Profile | undefined
+
+  const respond = (r: PartnerRequest, st: 'accepted' | 'rejected') => {
+    api.respond(r.id, st)
+    const n = P(r.from)?.name.split(' ')[0]
+    if (st === 'accepted') {
+      confetti({ count: 80, emoji: ['💘', '📱'] })
+      toast('success', `Matched with ${n}!`, 'They can now see your number.')
+    } else toast('info', `You passed on ${n}.`, 'Their popularity just went up. You’re a good person.')
+  }
+
+  const buy = () => {
+    try {
+      api.buyRequests(buyN)
+      toast('win', `+${buyN} request${buyN > 1 ? 's' : ''} unlocked`, `Spent ${(buyN * EXTRA_REQUEST_COST).toLocaleString()} $NERDY`)
+    } catch (e) {
+      toast('error', (e as Error).message)
+    }
+  }
+
+  const connect = async (p: Wallet['provider']) => {
+    setBusy(p)
+    try {
+      await api.connectWallet(p)
+      setWalletOpen(false)
+      toast('success', `${p} connected`)
+    } catch (e) {
+      toast('error', (e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const withdraw = async () => {
+    setBusy('withdraw')
+    try {
+      await api.withdraw(Number(amount))
+      setWithdrawOpen(false)
+      setAmount('')
+      confetti({ colors: ['#ff7a1a', '#ffd166', '#fff'], emoji: ['🪙'] })
+      toast('win', 'Withdrawal sent!', `${Number(amount).toLocaleString()} $NERDY is on its way.`)
+    } catch (e) {
+      toast('error', (e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'incoming', label: 'Incoming', count: incoming.length },
+    { id: 'sent', label: 'Sent', count: sent.length },
+    { id: 'matches', label: 'Matches', count: matches.length },
+    { id: 'ls', label: 'L Log', count: ls.length },
+  ]
+  const list = { incoming, sent, matches, ls }[tab]
+
+  return (
+    <Page className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 md:pt-10">
+      {/* header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link to={`/u/${me.id}`} className="h-16 w-16 overflow-hidden rounded-2xl border-2 border-carrot shadow-carrot transition hover:rotate-3">
+            <ProfilePhoto profile={me} className="h-full w-full" />
+          </Link>
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.25em] text-carrot">Dashboard</p>
+            <h1 className="text-3xl font-extrabold sm:text-4xl">Hey, {me.name.split(' ')[0]} 👋</h1>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Link to="/onboarding" className="chip py-2 hover:text-white">
+            <PencilLine className="h-3.5 w-3.5" /> Edit profile
+          </Link>
+          <button
+            onClick={() => {
+              api.logout()
+              nav('/')
+            }}
+            className="chip py-2 hover:text-white"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Log out
+          </button>
+        </div>
+      </div>
+
+      {/* phase banner */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={clsx('mt-6 flex flex-col gap-3 rounded-3xl border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5', s.phase === 1 ? 'border-grape/30 bg-grape/10' : 'border-lime/30 bg-lime/10')}>
+        <div className="flex items-center gap-3">
+          <span className={clsx('grid h-11 w-11 shrink-0 place-items-center rounded-2xl', s.phase === 1 ? 'bg-grape/20 text-grape-300' : 'bg-lime/20 text-lime')}>
+            {s.phase === 1 ? <Lock className="h-5 w-5" /> : <GraduationCap className="h-5 w-5" />}
+          </span>
+          <div>
+            <p className="font-semibold">{s.phase === 1 ? `Phase 1 · $NERDY is ${s.bondingProgress.toFixed(1)}% bonded` : 'Phase 2 · $NERDY has graduated 🎓'}</p>
+            <p className="text-sm text-white/60">
+              {s.phase === 1 ? 'Rejections count as popularity for now. Token rewards unlock at graduation.' : `Every rejection now pays ${REJECT_REWARD} $NERDY. Buy extra requests below.`}
+            </p>
+          </div>
+        </div>
+        <button onClick={() => api.setPhase(s.phase === 1 ? 2 : 1)} className="chip shrink-0 self-start py-2 hover:text-white sm:self-auto" title="Demo only">
+          <Rocket className="h-3.5 w-3.5" /> Demo: {s.phase === 1 ? 'simulate graduation' : 'back to Phase 1'}
+        </button>
+      </motion.div>
+
+      {/* stats */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatTile icon={Flame} label="Popularity" value={me.rejectionsReceived} tone="text-rizz" hint="Rejections received — public" />
+        <StatTile icon={HeartHandshake} label="Matches" value={me.accepts} tone="text-lime" hint="Accepted requests" delay={0.05} />
+        <StatTile icon={Send} label="Pending" value={pendingSent} tone="text-byte" hint="Waiting on an answer" delay={0.1} />
+        <StatTile icon={Swords} label="Hearts broken" value={me.rejectionsGiven} tone="text-grape-300" hint="Requests you rejected" delay={0.15} />
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+        {/* requests */}
+        <section className="card order-2 p-4 sm:p-6 lg:order-1">
+          <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1">
+            {tabs.map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)} className={clsx('relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition', tab === t.id ? 'text-ink-950' : 'text-white/60 hover:text-white')}>
+                {tab === t.id && <motion.span layoutId="dash-tab" className="absolute inset-0 rounded-full bg-carrot" transition={{ type: 'spring', stiffness: 500, damping: 35 }} />}
+                <span className="relative">{t.label}</span>
+                <span className={clsx('relative rounded-full px-1.5 text-[11px]', tab === t.id ? 'bg-ink-950/15' : 'bg-white/10')}>{t.count}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 min-h-[260px]">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {list.length === 0 ? (
+                <motion.div key={`empty-${tab}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center py-12 text-center">
+                  <Inbox className="h-10 w-10 text-white/20" />
+                  <p className="mt-3 font-semibold">{{ incoming: 'No incoming requests', sent: 'You haven’t shot your shot yet', matches: 'No matches yet', ls: 'No Ls yet. Go collect some!' }[tab]}</p>
+                  <Link to="/explore" className="btn-primary mt-5 !py-2.5 text-sm">
+                    Explore nerds
+                  </Link>
+                </motion.div>
+              ) : (
+                list.map((r) => {
+                  const otherId = r.from === me.id ? r.to : r.from
+                  const o = P(otherId)
+                  if (!o) return null
+                  const outgoing = r.from === me.id
+                  return (
+                    <motion.div key={r.id + tab} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -30 }} className="mb-2 flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-3 transition hover:bg-white/[0.05]">
+                      <Link to={`/u/${o.id}`} className="shrink-0">
+                        <ProfilePhoto profile={o} className="h-14 w-14 rounded-2xl" />
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <Link to={`/u/${o.id}`} className="block truncate font-semibold hover:text-carrot">
+                          {o.name}, {o.age}
+                        </Link>
+                        {tab === 'matches' ? (
+                          outgoing ? (
+                            <Scramble text={o.phone} className="font-mono text-sm text-lime" />
+                          ) : (
+                            <p className="text-xs text-white/50">You accepted — they have your number</p>
+                          )
+                        ) : (
+                          <p className="truncate text-xs text-white/50">
+                            {tab === 'ls' ? `Rejected you · ${timeAgo(r.resolvedAt ?? r.createdAt)}` : `${o.nerdClass} · ${timeAgo(r.createdAt)}`}
+                          </p>
+                        )}
+                      </div>
+                      {tab === 'incoming' ? (
+                        <div className="flex gap-2">
+                          <motion.button whileTap={{ scale: 0.85 }} onClick={() => respond(r, 'rejected')} className="grid h-11 w-11 place-items-center rounded-2xl border border-rizz/40 bg-rizz/10 text-rizz hover:bg-rizz/20" aria-label={`Reject ${o.name}`}>
+                            <X className="h-5 w-5" />
+                          </motion.button>
+                          <motion.button whileTap={{ scale: 0.85 }} onClick={() => respond(r, 'accepted')} className="grid h-11 w-11 place-items-center rounded-2xl border-2 border-ink-950 bg-lime text-ink-950 shadow-pop active:shadow-none" aria-label={`Accept ${o.name}`}>
+                            <Check className="h-5 w-5" />
+                          </motion.button>
+                        </div>
+                      ) : tab === 'matches' && outgoing ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => navigator.clipboard?.writeText(o.phone).then(() => toast('success', 'Number copied'))} className="rounded-xl p-2.5 text-white/60 hover:bg-white/10 hover:text-white" aria-label="Copy number">
+                            <Copy className="h-4 w-4" />
+                          </button>
+                          <a href={`tel:${o.phone.replace(/[^\d+]/g, '')}`} className="rounded-xl bg-lime p-2.5 text-ink-950" aria-label="Call">
+                            <Phone className="h-4 w-4" />
+                          </a>
+                        </div>
+                      ) : tab === 'ls' ? (
+                        <span className="rounded-full bg-rizz/15 px-2.5 py-1 font-mono text-xs font-bold text-rizz">+1 🔥</span>
+                      ) : (
+                        <span
+                          className={clsx(
+                            'rounded-full px-2.5 py-1 text-[11px] font-bold uppercase',
+                            r.status === 'pending' && 'bg-byte/15 text-byte',
+                            r.status === 'accepted' && 'bg-lime/15 text-lime',
+                            r.status === 'rejected' && 'bg-rizz/15 text-rizz',
+                          )}
+                        >
+                          {r.status === 'pending' ? (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 animate-spin [animation-duration:3s]" /> Pending
+                            </span>
+                          ) : r.status === 'accepted' ? (
+                            'Matched'
+                          ) : (
+                            'Rejected'
+                          )}
+                        </span>
+                      )}
+                    </motion.div>
+                  )
+                })
+              )}
+            </AnimatePresence>
+          </div>
+        </section>
+
+        {/* side column */}
+        <div className="order-1 space-y-6 lg:order-2">
+          {/* daily */}
+          <section className="card p-5 sm:p-6">
+            <div className="flex items-center gap-5">
+              <Ring left={daily.left} limit={daily.limit} />
+              <div>
+                <h2 className="text-xl font-bold">Daily requests</h2>
+                <p className="mt-1 text-sm text-white/60">
+                  {daily.limit - daily.bonus} free{daily.bonus ? ` + ${daily.bonus} bought` : ''} per day.
+                </p>
+                <p className="mt-3 flex items-center gap-1.5 font-mono text-xs text-white/50">
+                  <Clock className="h-3.5 w-3.5" /> Resets in {countdown}
+                </p>
+              </div>
+            </div>
+            <div className={clsx('mt-5 rounded-2xl border p-4', s.phase === 2 ? 'border-carrot/30 bg-carrot/5' : 'border-white/10 bg-white/[0.02]')}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Buy extra requests</p>
+                  <p className="text-xs text-white/50">{EXTRA_REQUEST_COST} $NERDY each{s.phase === 1 && ' · unlocks in Phase 2'}</p>
+                </div>
+                <div className="flex items-center gap-1 rounded-xl bg-ink-950/60 p-1">
+                  <button disabled={s.phase === 1 || buyN <= 1} onClick={() => setBuyN(buyN - 1)} className="rounded-lg p-1.5 hover:bg-white/10 disabled:opacity-30" aria-label="Less">
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="w-6 text-center font-mono font-bold">{buyN}</span>
+                  <button disabled={s.phase === 1 || buyN >= 10} onClick={() => setBuyN(buyN + 1)} className="rounded-lg p-1.5 hover:bg-white/10 disabled:opacity-30" aria-label="More">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <button onClick={buy} disabled={s.phase === 1} className="btn-primary mt-3 w-full !py-2.5 text-sm">
+                {s.phase === 1 ? <Lock className="h-4 w-4" /> : <Coins className="h-4 w-4" />} {s.phase === 1 ? 'Locked until graduation' : `Buy for ${(buyN * EXTRA_REQUEST_COST).toLocaleString()} $NERDY`}
+              </button>
+            </div>
+          </section>
+
+          {/* wallet */}
+          <section className="relative overflow-hidden rounded-3xl border-2 border-ink-950 bg-gradient-to-br from-carrot via-rizz to-grape p-[2px] shadow-pop-lg">
+            <div className="rounded-[1.4rem] bg-ink-900/90 p-5 backdrop-blur sm:p-6">
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-xs uppercase tracking-widest text-white/50">$NERDY balance</p>
+                {s.phase === 1 && <span className="chip text-[10px]"><Lock className="h-3 w-3" /> Phase 2</span>}
+              </div>
+              <p className="mt-2 font-display text-5xl font-extrabold">
+                <AnimatedNumber value={balance} />
+                <span className="ml-2 text-lg text-carrot">$N</span>
+              </p>
+              <p className="mt-1 text-xs text-white/50">
+                {s.phase === 1 ? `${me.rejectionsReceived} rejections banked as popularity. Tokens start flowing at graduation.` : `${REJECT_REWARD} $NERDY per rejection · min withdraw ${MIN_WITHDRAW}`}
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                {wallet ? (
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-grape/20 text-grape-300">
+                      <WalletIcon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-white/50">{wallet.provider}</p>
+                      <p className="truncate font-mono text-sm">
+                        {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}
+                      </p>
+                    </div>
+                    <button onClick={() => api.disconnectWallet()} className="rounded-xl p-2 text-white/50 hover:bg-white/10 hover:text-white" aria-label="Disconnect wallet">
+                      <Unplug className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setWalletOpen(true)} className="flex w-full items-center justify-center gap-2 py-1.5 text-sm font-semibold text-white/80 hover:text-white">
+                    <WalletIcon className="h-4 w-4" /> Connect Solana wallet
+                  </button>
+                )}
+              </div>
+              <button onClick={() => setWithdrawOpen(true)} disabled={s.phase === 1 || !wallet} className="btn-primary mt-3 w-full">
+                <ArrowUpRight className="h-4 w-4" /> Withdraw
+              </button>
+
+              {ledger.length > 0 && (
+                <div className="mt-5">
+                  <p className="label">Activity</p>
+                  <ul className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                    {ledger.slice(0, 20).map((e) => (
+                      <li key={e.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="truncate text-white/70">{e.note}</span>
+                        <span className={clsx('shrink-0 font-mono font-semibold', e.amount > 0 ? 'text-lime' : 'text-white/50')}>
+                          {e.amount > 0 ? '+' : ''}
+                          {e.amount.toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* wallet modal */}
+      <Modal open={walletOpen} onClose={() => setWalletOpen(false)} title="Connect wallet">
+        <h2 className="text-2xl font-bold">Connect a wallet</h2>
+        <p className="mt-1 text-sm text-white/60">Withdraw $NERDY straight to Solana.</p>
+        <div className="mt-6 space-y-2">
+          {(
+            [
+              ['Phantom', 'from-[#ab9ff2] to-[#534bb1]'],
+              ['Solflare', 'from-[#ffc10b] to-[#fb3f2e]'],
+              ['Backpack', 'from-[#e33e3f] to-[#a42b2c]'],
+            ] as const
+          ).map(([p, g]) => (
+            <button key={p} onClick={() => connect(p)} disabled={!!busy} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-white/25 hover:bg-white/[0.06]">
+              <span className={`grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br ${g} font-bold`}>{p[0]}</span>
+              <span className="flex-1 font-semibold">{p}</span>
+              {busy === p ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4 text-white/40" />}
+            </button>
+          ))}
+        </div>
+        <p className="mt-4 text-center text-xs text-white/40">Demo mode: non-Phantom wallets use a simulated address.</p>
+      </Modal>
+
+      {/* withdraw modal */}
+      <Modal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} title="Withdraw">
+        <h2 className="text-2xl font-bold">Withdraw $NERDY</h2>
+        <p className="mt-1 text-sm text-white/60">Available: <b className="text-white">{balance.toLocaleString()}</b></p>
+        <div className="relative mt-5">
+          <input className="input pr-20 font-mono text-xl" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} placeholder="0" aria-label="Amount" />
+          <button onClick={() => setAmount(String(balance))} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-carrot/15 px-3 py-1.5 text-xs font-bold text-carrot">MAX</button>
+        </div>
+        {wallet && <p className="mt-3 text-xs text-white/50">To {wallet.provider} · {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}</p>}
+        <button onClick={withdraw} disabled={busy === 'withdraw' || !amount} className="btn-primary mt-6 w-full py-4">
+          {busy === 'withdraw' ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUpRight className="h-5 w-5" />} Withdraw
+        </button>
+      </Modal>
+
+      {outcome && P(outcome.to) && (
+        <OutcomeModal open onClose={() => setOutcome(null)} status={outcome.status as 'accepted' | 'rejected'} other={P(outcome.to)!} me={me} phase={s.phase} />
+      )}
+    </Page>
+  )
+}
