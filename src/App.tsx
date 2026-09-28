@@ -1,6 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { Backdrop, BottomTabs, ScrollManager, TopNav } from './components/Layout'
 import Loader from './components/Loader'
 import { selectMe, useStore } from './lib/store'
@@ -57,6 +58,7 @@ export default function App() {
         )}
       </AnimatePresence>
       <BottomTabs />
+      <SpeedInsights />
     </div>
   )
 }
