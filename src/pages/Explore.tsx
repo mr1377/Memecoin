@@ -19,6 +19,8 @@ type FilterId = (typeof FILTERS)[number]['id']
 
 const GENDERS: (Gender | 'Everyone')[] = ['Everyone', 'Woman', 'Man', 'Non-binary']
 const GENDER_LABEL = { Everyone: 'Everyone', Woman: 'Women', Man: 'Men', 'Non-binary': 'Non-binary', Other: 'Other' }
+const norm = (c: string) => c.trim().toLowerCase()
+const region = (c: string) => norm(c.split(',')[1] ?? '')
 const WEEK = 7 * 86400_000
 
 export default function Explore() {
@@ -52,6 +54,8 @@ export default function Explore() {
     setParams(next, { replace: true })
   }
 
+  const myCity = s.session ? s.profiles[s.session]?.city ?? '' : ''
+
   const list = useMemo(() => {
     const now = Date.now()
     const needle = q.trim().toLowerCase()
@@ -63,7 +67,11 @@ export default function Explore() {
       )
     switch (f) {
       case 'nearby':
-        arr = arr.filter((p) => p.distanceKm <= 25).sort((a, b) => a.distanceKm - b.distanceKm)
+        if (myCity) {
+          // Same city first, then same state/region (the part after the comma).
+          const score = (c: string) => (norm(c) === norm(myCity) ? 2 : region(c) && region(c) === region(myCity) ? 1 : 0)
+          arr = arr.filter((p) => score(p.city) > 0).sort((a, b) => score(b.city) - score(a.city))
+        } else arr = arr.sort((a, b) => a.city.localeCompare(b.city))
         break
       case 'new':
         arr = arr.filter((p) => now - p.joinedAt < WEEK * 2).sort((a, b) => b.joinedAt - a.joinedAt)
@@ -72,10 +80,10 @@ export default function Explore() {
         arr = arr.sort((a, b) => b.rejectionsReceived - a.rejectionsReceived)
         break
       default:
-        arr = arr.sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || a.distanceKm - b.distanceKm)
+        arr = arr.sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b.joinedAt - a.joinedAt)
     }
     return arr
-  }, [s.profiles, s.session, q, f, g])
+  }, [s.profiles, s.session, q, f, g, myCity])
 
   const daily = s.session && s.profiles[s.session] ? dailyInfo(s, s.session) : null
 
@@ -162,6 +170,7 @@ export default function Explore() {
 
       <p className="mb-4 mt-2 text-sm text-white/40" aria-live="polite">
         {loading ? 'Scanning the town…' : `${list.length} nerd${list.length === 1 ? '' : 's'} found`}
+        {!loading && f === 'nearby' && (myCity ? ` near ${myCity}` : ' · log in to see nerds in your city')}
       </p>
 
       {loading ? (

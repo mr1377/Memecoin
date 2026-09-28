@@ -8,7 +8,7 @@ import AnimatedNumber from './AnimatedNumber'
 import { confetti } from './Confetti'
 import Modal from './Modal'
 import NerdAvatar from './NerdAvatar'
-import PhoneReveal from './PhoneReveal'
+import SocialsReveal from './SocialsReveal'
 import ProfilePhoto from './ProfilePhoto'
 import { MASCOT } from './Mascot'
 
@@ -25,7 +25,7 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => {
-      if (status === 'accepted') confetti({ y: innerHeight * 0.35, emoji: ['📱', '💘', '🤓', '✨'] })
+      if (status === 'accepted') confetti({ y: innerHeight * 0.35, emoji: ['💬', '💘', '🤓', '✨'] })
       else confetti({ y: innerHeight * 0.35, count: 90, colors: ['#ff4d8d', '#ff7a1a', '#8b5cf6', '#fff'], emoji: ['🏆', '🔥', '🤓'] })
     }, 250)
     return () => clearTimeout(t)
@@ -56,8 +56,8 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
             <h2 className="mt-8 text-3xl font-extrabold">
               {other.name.split(' ')[0]} said <span className="text-lime">yes!</span>
             </h2>
-            <p className="mt-2 text-white/60">The digits are yours. Be cool. (You won’t be. That’s fine.)</p>
-            <PhoneReveal phone={other.phone} className="mt-6 text-left" />
+            <p className="mt-2 text-white/60">Their socials are yours. Slide in. Be cool. (You won’t be. That’s fine.)</p>
+            <SocialsReveal socials={other.socials} className="mt-6 text-left" />
           </>
         ) : (
           <>

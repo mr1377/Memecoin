@@ -10,7 +10,9 @@ import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
 import { AVATAR_OPTIONS, seedAvatar } from '../lib/avatar'
 import { api, selectMe, uid, useStore } from '../lib/store'
-import type { AvatarSeed, Gender, NerdClass, Profile } from '../lib/types'
+import type { AvatarSeed, Gender, NerdClass, Profile, Social } from '../lib/types'
+import { PLATFORMS, platformInfo, validateSocial } from '../lib/socials'
+import { SocialIcon } from '../components/SocialsReveal'
 
 const GENDERS: Gender[] = ['Man', 'Woman', 'Non-binary', 'Other']
 const LOOKING: Profile['lookingFor'][] = ['Woman', 'Man', 'Non-binary', 'Everyone']
@@ -93,7 +95,6 @@ export default function Onboarding() {
     name: existing?.name ?? '',
     age: existing?.age ? String(existing.age) : '',
     gender: existing?.gender ?? ('Man' as Gender),
-    pronouns: existing?.pronouns ?? '',
     lookingFor: existing?.lookingFor ?? ('Everyone' as Profile['lookingFor']),
     photos: existing?.photos ?? ([] as string[]),
     avatar: existing?.avatar ?? seedAvatar(uid()),
@@ -101,7 +102,7 @@ export default function Onboarding() {
     tagline: existing?.tagline ?? '',
     bio: existing?.bio ?? '',
     interests: existing?.interests ?? ([] as string[]),
-    phone: existing?.phone ?? '',
+    socials: existing?.socials ?? ([] as Social[]),
     city: existing?.city ?? '',
   }))
   const [tagDraft, setTagDraft] = useState('')
@@ -125,7 +126,11 @@ export default function Onboarding() {
       if (form.interests.length < 1) e.interests = 'Pick at least one interest.'
     }
     if (s === 3) {
-      if (form.phone.replace(/\D/g, '').length < 7) e.phone = 'Enter a valid phone number.'
+      if (!form.socials.length) e.socials = 'Add at least one way to reach you.'
+      for (const so of form.socials) {
+        const err = validateSocial(so)
+        if (err) e[`social-${so.platform}`] = err
+      }
       if (form.city.trim().length < 2) e.city = 'Which town do you haunt?'
     }
     setErrors(e)
@@ -148,7 +153,6 @@ export default function Onboarding() {
         name: form.name.trim(),
         age: Number(form.age),
         gender: form.gender,
-        pronouns: form.pronouns.trim() || undefined,
         lookingFor: form.lookingFor,
         photos: form.photos,
         avatar: form.avatar,
@@ -156,7 +160,7 @@ export default function Onboarding() {
         tagline: form.tagline.trim(),
         bio: form.bio.trim(),
         interests: form.interests,
-        phone: form.phone.trim(),
+        socials: form.socials.map((so) => ({ ...so, handle: so.handle.trim() })),
         city: form.city.trim(),
       })
       confetti({ emoji: ['🤓', '🎉', '👓'] })
@@ -200,14 +204,9 @@ export default function Onboarding() {
       <Field label="Display name" error={errors.name}>
         <input className="input" value={form.name} onChange={(e) => up('name', e.target.value)} placeholder="Ada Lovelace" maxLength={40} autoComplete="name" />
       </Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Age" error={errors.age}>
-          <input className="input" inputMode="numeric" value={form.age} onChange={(e) => up('age', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="24" />
-        </Field>
-        <Field label="Pronouns (optional)">
-          <input className="input" value={form.pronouns} onChange={(e) => up('pronouns', e.target.value)} placeholder="they/them" maxLength={20} />
-        </Field>
-      </div>
+      <Field label="Age" error={errors.age}>
+        <input className="input max-w-[140px]" inputMode="numeric" value={form.age} onChange={(e) => up('age', e.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="24" />
+      </Field>
       <Field label="Gender">
         <Seg name="gender" options={GENDERS} value={form.gender} onChange={(v) => up('gender', v)} />
       </Field>
@@ -379,11 +378,60 @@ export default function Onboarding() {
       <div className="flex gap-3 rounded-2xl border border-byte/30 bg-byte/10 p-4 text-sm">
         <Lock className="h-5 w-5 shrink-0 text-byte" />
         <p className="text-white/80">
-          Your phone number is <b>never shown publicly</b>. It’s revealed only to a person whose request <b>you accept</b>.
+          Your socials are <b>never shown publicly</b>. They’re revealed only to a person whose request <b>you accept</b>.
         </p>
       </div>
-      <Field label="Phone number" error={errors.phone} hint="Include your country code.">
-        <input className="input font-mono" type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={(e) => up('phone', e.target.value.replace(/[^\d+()\-\s]/g, '').slice(0, 20))} placeholder="+1 555 123 4567" />
+      <Field label={`Your socials (${form.socials.length}/5)`} error={errors.socials} hint="Tap the platforms you use, then add your handle.">
+        <div className="flex flex-wrap gap-2">
+          {PLATFORMS.map(({ id }) => {
+            const on = form.socials.some((so) => so.platform === id)
+            return (
+              <button
+                type="button"
+                key={id}
+                aria-pressed={on}
+                onClick={() => {
+                  if (on) up('socials', form.socials.filter((so) => so.platform !== id))
+                  else if (form.socials.length < 5) up('socials', [...form.socials, { platform: id, handle: '' }])
+                }}
+                className={clsx('flex items-center gap-2 rounded-2xl border py-1.5 pl-1.5 pr-3 text-sm font-semibold transition', on ? 'border-carrot bg-carrot/10 text-white' : 'border-white/10 bg-white/[0.03] text-white/60 hover:text-white')}
+              >
+                <SocialIcon platform={id} className="h-7 w-7 rounded-lg" />
+                {id}
+                {on && <Check className="h-3.5 w-3.5 text-carrot" />}
+              </button>
+            )
+          })}
+        </div>
+        <AnimatePresence initial={false}>
+          {form.socials.map((so, i) => (
+            <motion.div key={so.platform} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="flex items-center gap-3 pt-3">
+                <SocialIcon platform={so.platform} className="h-12 w-12" />
+                <div className="min-w-0 flex-1">
+                  <input
+                    className="input font-mono"
+                    value={so.handle}
+                    aria-label={`${so.platform} handle`}
+                    type={so.platform === 'Email' ? 'email' : so.platform === 'WhatsApp' ? 'tel' : 'text'}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={60}
+                    placeholder={platformInfo(so.platform).placeholder}
+                    onChange={(e) => {
+                      const next = [...form.socials]
+                      next[i] = { ...so, handle: e.target.value }
+                      up('socials', next)
+                      setErrors((er) => ({ ...er, [`social-${so.platform}`]: '' }))
+                    }}
+                  />
+                  {errors[`social-${so.platform}`] && <p className="mt-1 text-xs text-rizz">{errors[`social-${so.platform}`]}</p>}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </Field>
       <Field label="City" error={errors.city}>
         <input className="input" value={form.city} onChange={(e) => up('city', e.target.value)} placeholder="Brooklyn, NY" autoComplete="address-level2" maxLength={40} />

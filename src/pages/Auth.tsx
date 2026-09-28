@@ -156,7 +156,7 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
           <button onClick={demo} disabled={!!busy} className="btn-ghost w-full">
             {busy === 'demo' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wand2 className="h-4 w-4 text-grape-300" />} Try the demo nerd
           </button>
-          <p className="mt-6 text-center text-xs text-white/40">By joining you agree to be kind. Phone numbers are only shared when you accept a request.</p>
+          <p className="mt-6 text-center text-xs text-white/40">By joining you agree to be kind. Your socials are only shared when you accept a request.</p>
         </div>
       </motion.div>
     </Page>

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion, useMotionValue, useScroll, useSpring, useTransform } from 'framer-motion'
-import { ArrowRight, Check, ChevronDown, Coins, Crown, Heart, Lock, Phone, Rocket, Send, Shield, Sparkles, Trophy, UserPlus, X, Zap } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Coins, Crown, Heart, Instagram, Lock, Rocket, Send, Shield, Sparkles, Trophy, UserPlus, X, Zap } from 'lucide-react'
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../components/AnimatedNumber'
@@ -96,7 +96,7 @@ function Hero() {
         </motion.h1>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mx-auto mt-8 max-w-xl text-lg text-white/70 lg:mx-0">
-          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their number. They <b className="text-rizz">reject</b>? Your popularity climbs — and after graduation, every L pays out in <b className="text-carrot">$NERDY</b>.
+          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs — and after graduation, every L pays out in <b className="text-carrot">$NERDY</b>.
         </motion.p>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
@@ -135,10 +135,10 @@ function Hero() {
 
         <FloatCard depth={1.2} mx={mx} my={my} className="-left-2 top-[14%] sm:-left-6">
           <div className="flex items-center gap-2 rounded-2xl border-2 border-ink-950 bg-lime px-3 py-2 text-ink-950 shadow-pop">
-            <Phone className="h-4 w-4" />
+            <Instagram className="h-4 w-4" />
             <div className="text-left leading-tight">
               <p className="text-[10px] font-bold uppercase">Accepted!</p>
-              <p className="font-mono text-xs font-bold">+1 (555) 867-5309</p>
+              <p className="font-mono text-xs font-bold">@stella.stars</p>
             </div>
           </div>
         </FloatCard>
@@ -166,7 +166,7 @@ function Hero() {
 // ------------------------------------------------------------------ MARQUEE
 
 function Marquee() {
-  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the digits', '$NERDY', '3 free shots a day', 'Ls convert to tokens', 'Glasses on. Fear off.']
+  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Ls convert to tokens', 'Glasses on. Fear off.']
   const row = [...items, ...items]
   return (
     <div className="overflow-hidden py-8">
@@ -200,7 +200,7 @@ function WinWinDemo() {
       setState(outcome)
       const r = btn.current?.getBoundingClientRect()
       const at = r ? { x: r.left + r.width / 2, y: r.top } : {}
-      if (outcome === 'accepted') confetti({ ...at, emoji: ['📱', '💘', '🤓'] })
+      if (outcome === 'accepted') confetti({ ...at, emoji: ['💬', '💘', '🤓'] })
       else {
         setPop((p) => p + 1)
         if (phase2) setTokens((t) => t + REJECT_REWARD)
@@ -229,9 +229,9 @@ function WinWinDemo() {
             </span>
             <h3 className="text-2xl font-bold">If they accept</h3>
           </div>
-          <p className="mt-3 text-white/60">Their phone number is revealed to you instantly. No awkward DMs, no games. Just the digits.</p>
+          <p className="mt-3 text-white/60">Their socials are revealed to you instantly — Instagram, X, Telegram, whatever they use. Slide straight into the DMs.</p>
           <ul className="mt-5 space-y-2 text-sm">
-            {['Direct contact reveal', 'Numbers stay private until accepted', 'Counts as a Match on your board'].map((t) => (
+            {['Instant socials reveal', 'Socials stay private until accepted', 'Counts as a Match on your board'].map((t) => (
               <li key={t} className="flex items-center gap-2 text-white/80">
                 <Check className="h-4 w-4 text-lime" /> {t}
               </li>
@@ -239,7 +239,7 @@ function WinWinDemo() {
           </ul>
         </motion.div>
 
-        {/* phone */}
+        {/* phone mockup */}
         <motion.div {...reveal} className="order-1 mx-auto w-[300px] lg:order-2">
           <div className="relative rounded-[3rem] border-[10px] border-ink-950 bg-ink-800 p-4 shadow-[0_30px_80px_-20px_rgba(255,122,26,.45)] ring-1 ring-white/10">
             <div className="mx-auto mb-3 h-5 w-24 rounded-full bg-ink-950" />
@@ -248,7 +248,7 @@ function WinWinDemo() {
                 <NerdAvatar seed={seed} className="h-full w-full" mood={state === 'accepted' ? 'happy' : state === 'rejected' ? 'smug' : 'smug'} />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/70 to-transparent p-4 pt-16">
                   <p className="font-display text-2xl font-bold">Stella, 24</p>
-                  <p className="text-sm text-white/60">Astrophysics · 2 km away</p>
+                  <p className="text-sm text-white/60">Astrophysics · Brooklyn, NY</p>
                 </div>
                 <AnimatePresence>
                   {(state === 'accepted' || state === 'rejected') && (
@@ -271,8 +271,8 @@ function WinWinDemo() {
                 <AnimatePresence mode="wait">
                   {state === 'accepted' ? (
                     <motion.div key="a" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="rounded-2xl border border-lime/30 bg-lime/10 p-3 text-center">
-                      <p className="text-xs font-semibold uppercase text-lime">Number unlocked</p>
-                      <p className="font-mono text-lg font-bold">+1 (555) 314-1592</p>
+                      <p className="text-xs font-semibold uppercase text-lime">Socials unlocked</p>
+                      <p className="flex items-center justify-center gap-2 font-mono text-lg font-bold"><Instagram className="h-4 w-4" /> @stella.stars</p>
                     </motion.div>
                   ) : state === 'rejected' ? (
                     <motion.div key="r" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="rounded-2xl border border-rizz/30 bg-rizz/10 p-3 text-center">
@@ -341,9 +341,9 @@ function WinWinDemo() {
 
 function HowItWorks() {
   const steps = [
-    { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign up, add a photo (or generate your inner nerd), write a bio, pick your interests. Your phone number stays locked.', color: 'from-grape to-byte' },
+    { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign up, add a photo (or generate your inner nerd), write a bio, pick your interests. Your socials stay locked.', color: 'from-grape to-byte' },
     { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot. ${FREE_DAILY_REQUESTS} free requests every day — more with $NERDY after graduation.`, color: 'from-carrot to-rizz' },
-    { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get the number. Rejected → you get popularity now, and $NERDY tokens after graduation.', color: 'from-lime to-byte' },
+    { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get their socials. Rejected → you get popularity now, and $NERDY tokens after graduation.', color: 'from-lime to-byte' },
   ]
   return (
     <section className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6">
@@ -387,7 +387,7 @@ function Roadmap() {
       n: 1,
       title: 'Pre-graduation',
       sub: 'While $NERDY bonds on pump.fun',
-      points: [`${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant phone number reveal', 'Rejections build public popularity', 'Leaderboard of legendary Ls'],
+      points: [`${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant socials reveal', 'Rejections build public popularity', 'Leaderboard of legendary Ls'],
       icon: Shield,
     },
     {
@@ -403,7 +403,7 @@ function Roadmap() {
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <Eyebrow>Roadmap</Eyebrow>
         <h2 className="mt-4 text-4xl font-extrabold sm:text-6xl">Two phases. One token.</h2>
-        <p className="mt-5 text-white/60">Profiles, requests, accept/reject and number reveals work the same in both phases. Graduation just turns your Ls into money.</p>
+        <p className="mt-5 text-white/60">Profiles, requests, accept/reject and socials reveals work the same in both phases. Graduation just turns your Ls into money.</p>
       </motion.div>
 
       <motion.div {...reveal} className="card mx-auto mt-12 max-w-3xl p-6">
@@ -518,7 +518,7 @@ function HallOfFame() {
 
 function FAQ() {
   const qs = [
-    ['Is my phone number public?', 'Never. Your number is locked until you personally accept someone’s request. Only that one person sees it.'],
+    ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
     ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. After $NERDY graduates, each rejection also pays you in tokens.'],
     ['How many requests can I send?', `${FREE_DAILY_REQUESTS} free requests per day, reset at midnight UTC. In Phase 2 you can buy more with $NERDY.`],
     ['What is graduation?', 'On pump.fun, a token “graduates” when its bonding curve completes and it moves to open liquidity. That’s our trigger for Phase 2.'],
@@ -609,7 +609,7 @@ export function Footer() {
         </div>
       </div>
       <p className="mt-8 flex items-center gap-2">
-        <Lock className="h-3.5 w-3.5" /> Phone numbers are only revealed on accept. © {new Date().getFullYear()} Nerdy Town.
+        <Lock className="h-3.5 w-3.5" /> Socials are only revealed on accept. © {new Date().getFullYear()} Nerdy Town.
       </p>
     </footer>
   )

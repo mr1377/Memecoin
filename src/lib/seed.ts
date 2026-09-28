@@ -1,5 +1,12 @@
 import { seedAvatar } from './avatar'
-import type { Gender, NerdClass, Profile } from './types'
+import type { Gender, NerdClass, Profile, Social, SocialPlatform } from './types'
+
+const BOT_PLATFORMS: SocialPlatform[][] = [['Instagram', 'Telegram'], ['X', 'Discord'], ['Instagram', 'Snapchat'], ['Telegram'], ['TikTok', 'Instagram'], ['X']]
+
+function botSocials(name: string, i: number): Social[] {
+  const handle = name.toLowerCase().replace(/[^a-z]+/g, '.').replace(/\.$/, '') + (i % 3 === 0 ? '' : String(i * 7 + 3))
+  return BOT_PLATFORMS[i % BOT_PLATFORMS.length].map((platform) => ({ platform, handle }))
+}
 
 type Raw = [name: string, age: number, gender: Gender, city: string, nerdClass: NerdClass, tagline: string, interests: string[], bio: string]
 
@@ -40,17 +47,15 @@ export function makeSeedProfiles(now: number): Profile[] {
       name,
       age,
       gender,
-      pronouns: gender === 'Man' ? 'he/him' : gender === 'Woman' ? 'she/her' : 'they/them',
       lookingFor,
       city,
-      distanceKm: Math.round(((i * 53) % 480) / (i % 4 === 0 ? 40 : 1) * 10) / 10 + 0.4,
       nerdClass,
       tagline,
       bio,
       interests,
       photos: [],
       avatar: seedAvatar(id),
-      phone: `+1 (555) ${String(200 + ((i * 71) % 700)).padStart(3, '0')}-${String(1000 + ((i * 331) % 8999)).padStart(4, '0')}`,
+      socials: botSocials(name, i),
       joinedAt: now - (i % 5 === 0 ? i * 3600_000 : (i + 3) * 86400_000 * 2),
       rejectionsGiven: (i * 13) % 40,
       rejectionsReceived: rj,

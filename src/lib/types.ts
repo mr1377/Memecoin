@@ -27,22 +27,27 @@ export interface Profile {
   name: string
   age: number
   gender: Gender
-  pronouns?: string
   lookingFor: Gender | 'Everyone'
   city: string
-  distanceKm: number
   nerdClass: NerdClass
   tagline: string
   bio: string
   interests: string[]
   photos: string[] // data URLs (uploads) — empty means generated avatar
   avatar: AvatarSeed
-  phone: string // private until accepted
+  socials: Social[] // private until accepted
   joinedAt: number
   rejectionsGiven: number
   rejectionsReceived: number
   accepts: number
   verified?: boolean
+}
+
+export type SocialPlatform = 'Instagram' | 'X' | 'Telegram' | 'Snapchat' | 'Discord' | 'TikTok' | 'WhatsApp' | 'Email'
+
+export interface Social {
+  platform: SocialPlatform
+  handle: string
 }
 
 export type RequestStatus = 'pending' | 'accepted' | 'rejected'

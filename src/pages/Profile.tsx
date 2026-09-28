@@ -6,10 +6,10 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
 import Modal from '../components/Modal'
 import OutcomeModal from '../components/Outcome'
-import PhoneReveal, { LockedPhone } from '../components/PhoneReveal'
+import SocialsReveal, { LockedSocials } from '../components/SocialsReveal'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
-import { api, dailyInfo, relationWith, revealedPhone, selectMe, useStore } from '../lib/store'
+import { api, dailyInfo, relationWith, revealedSocials, selectMe, useStore } from '../lib/store'
 import type { Profile } from '../lib/types'
 import NotFound from './NotFound'
 
@@ -81,7 +81,7 @@ export default function ProfilePage() {
   const me = useStore(selectMe)
   const profile = s.profiles[id]
   const rel = relationWith(s, id)
-  const phone = revealedPhone(s, id)
+  const socials = revealedSocials(s, id)
   const [confirm, setConfirm] = useState(false)
   const [outcome, setOutcome] = useState<null | 'accepted' | 'rejected'>(null)
   const prevStatus = useRef(rel?.status)
@@ -114,7 +114,7 @@ export default function ProfilePage() {
   const respond = (st: 'accepted' | 'rejected') => {
     if (!rel) return
     api.respond(rel.id, st)
-    toast(st === 'accepted' ? 'success' : 'info', st === 'accepted' ? 'Accepted! They now have your number.' : 'Rejected. You just made them more popular 😇')
+    toast(st === 'accepted' ? 'success' : 'info', st === 'accepted' ? 'Accepted! They can now see your socials.' : 'Rejected. You just made them more popular 😇')
   }
   const share = async () => {
     const url = location.href
@@ -228,8 +228,8 @@ export default function ProfilePage() {
             <p className="mt-3 text-lg italic text-white/70">“{profile.tagline}”</p>
 
             <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/60">
-              <span>{profile.gender}{profile.pronouns && ` · ${profile.pronouns}`}</span>
-              <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {profile.city}{!isMe && ` · ${profile.distanceKm < 1 ? '<1' : Math.round(profile.distanceKm)} km`}</span>
+              <span>{profile.gender}</span>
+              <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {profile.city}</span>
               <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" /> Joined {joined}</span>
             </div>
           </motion.div>
@@ -266,13 +266,13 @@ export default function ProfilePage() {
           </section>
 
           <section className="mt-6">
-            <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-white/50">Contact</h2>
+            <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-white/50">Socials</h2>
             {isMe ? (
-              <PhoneReveal phone={profile.phone} />
-            ) : phone ? (
-              <PhoneReveal phone={phone} />
+              <SocialsReveal socials={profile.socials} label="Your socials (private)" />
+            ) : socials ? (
+              <SocialsReveal socials={socials} />
             ) : (
-              <LockedPhone />
+              <LockedSocials />
             )}
           </section>
         </div>
@@ -285,7 +285,7 @@ export default function ProfilePage() {
         <div className="text-center">
           <ProfilePhoto profile={profile} className="mx-auto h-24 w-24 rounded-3xl" />
           <h2 className="mt-4 text-2xl font-bold">Shoot your shot with {profile.name.split(' ')[0]}?</h2>
-          <p className="mt-2 text-white/60">If they accept, you get their number. If they reject, you get popularity{s.phase === 2 ? ' and $NERDY' : ''}. You literally can’t lose.</p>
+          <p className="mt-2 text-white/60">If they accept, you get their socials. If they reject, you get popularity{s.phase === 2 ? ' and $NERDY' : ''}. You literally can’t lose.</p>
           {daily && (
             <p className="mt-4 font-mono text-sm text-white/50">
               Uses 1 of your <b className="text-carrot">{daily.left}</b> remaining request{daily.left === 1 ? '' : 's'} today

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, Check, Clock, Coins, Copy, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LogOut, Minus, PencilLine, Phone, Plus, Rocket, Send, Swords, Unplug, Wallet as WalletIcon, X } from 'lucide-react'
+import { ArrowUpRight, Check, Clock, Coins, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LogOut, Minus, PencilLine, Plus, Rocket, Send, Swords, Unplug, Wallet as WalletIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AnimatedNumber from '../components/AnimatedNumber'
@@ -8,7 +8,8 @@ import { confetti } from '../components/Confetti'
 import { Page } from '../components/Layout'
 import Modal from '../components/Modal'
 import OutcomeModal from '../components/Outcome'
-import { Scramble } from '../components/PhoneReveal'
+import { Scramble, SocialIcon } from '../components/SocialsReveal'
+import { displayHandle, socialUrl } from '../lib/socials'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
 import { EXTRA_REQUEST_COST, MIN_WITHDRAW, REJECT_REWARD, api, dailyInfo, selectMe, useStore } from '../lib/store'
@@ -135,8 +136,8 @@ export default function Dashboard() {
     api.respond(r.id, st)
     const n = P(r.from)?.name.split(' ')[0]
     if (st === 'accepted') {
-      confetti({ count: 80, emoji: ['💘', '📱'] })
-      toast('success', `Matched with ${n}!`, 'They can now see your number.')
+      confetti({ count: 80, emoji: ['💘', '💬'] })
+      toast('success', `Matched with ${n}!`, 'They can now see your socials.')
     } else toast('info', `You passed on ${n}.`, 'Their popularity just went up. You’re a good person.')
   }
 
@@ -240,7 +241,7 @@ export default function Dashboard() {
         <StatTile icon={Swords} label="Hearts broken" value={me.rejectionsGiven} tone="text-grape-300" hint="Requests you rejected" delay={0.15} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         {/* requests */}
         <section className="card order-2 p-4 sm:p-6 lg:order-1">
           <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1">
@@ -280,9 +281,12 @@ export default function Dashboard() {
                         </Link>
                         {tab === 'matches' ? (
                           outgoing ? (
-                            <Scramble text={o.phone} className="font-mono text-sm text-lime" />
+                            <p className="truncate text-sm text-lime">
+                              <Scramble text={o.socials[0] ? displayHandle(o.socials[0]) : ''} className="font-mono" />
+                              {o.socials.length > 1 && <span className="text-xs text-white/40"> +{o.socials.length - 1} more</span>}
+                            </p>
                           ) : (
-                            <p className="text-xs text-white/50">You accepted — they have your number</p>
+                            <p className="text-xs text-white/50">You accepted — they can see your socials</p>
                           )
                         ) : (
                           <p className="truncate text-xs text-white/50">
@@ -300,13 +304,20 @@ export default function Dashboard() {
                           </motion.button>
                         </div>
                       ) : tab === 'matches' && outgoing ? (
-                        <div className="flex gap-1">
-                          <button onClick={() => navigator.clipboard?.writeText(o.phone).then(() => toast('success', 'Number copied'))} className="rounded-xl p-2.5 text-white/60 hover:bg-white/10 hover:text-white" aria-label="Copy number">
-                            <Copy className="h-4 w-4" />
-                          </button>
-                          <a href={`tel:${o.phone.replace(/[^\d+]/g, '')}`} className="rounded-xl bg-lime p-2.5 text-ink-950" aria-label="Call">
-                            <Phone className="h-4 w-4" />
-                          </a>
+                        <div className="flex gap-1.5">
+                          {o.socials.slice(0, 3).map((so) => {
+                            const url = socialUrl(so)
+                            const copy = () => navigator.clipboard?.writeText(displayHandle(so)).then(() => toast('success', `${so.platform} copied`, displayHandle(so)))
+                            return url ? (
+                              <a key={so.platform} href={url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${so.platform}`} className="transition hover:scale-110">
+                                <SocialIcon platform={so.platform} className="h-9 w-9" />
+                              </a>
+                            ) : (
+                              <button key={so.platform} onClick={copy} aria-label={`Copy ${so.platform}`} className="transition hover:scale-110">
+                                <SocialIcon platform={so.platform} className="h-9 w-9" />
+                              </button>
+                            )
+                          })}
                         </div>
                       ) : tab === 'ls' ? (
                         <span className="rounded-full bg-rizz/15 px-2.5 py-1 font-mono text-xs font-bold text-rizz">+1 🔥</span>

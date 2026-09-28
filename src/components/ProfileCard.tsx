@@ -73,7 +73,7 @@ export default function ProfileCard({ profile, relation, me, index = 0 }: { prof
               </p>
               <p className="mt-0.5 line-clamp-1 text-xs text-white/70 sm:text-sm">{profile.interests.slice(0, 3).join(' · ')}</p>
               <p className="mt-1.5 flex items-center gap-1 text-[11px] text-white/45">
-                <MapPin className="h-3 w-3" /> {profile.distanceKm < 1 ? '<1' : Math.round(profile.distanceKm)} km · {profile.nerdClass}
+                <MapPin className="h-3 w-3" /> {profile.city} · {profile.nerdClass}
               </p>
             </div>
           </div>

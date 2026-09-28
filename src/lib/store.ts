@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { seedAvatar } from './avatar'
 import { makeSeedProfiles } from './seed'
-import type { Account, LedgerEntry, PartnerRequest, Profile, Wallet } from './types'
+import type { Account, LedgerEntry, PartnerRequest, Profile, Social, Wallet } from './types'
 
 /**
  * Nerdy Town mock backend.
@@ -14,7 +14,7 @@ export const REJECT_REWARD = 100 // $NERDY per rejection (Phase 2)
 export const EXTRA_REQUEST_COST = 250 // $NERDY per extra daily request (Phase 2)
 export const MIN_WITHDRAW = 500
 
-const KEY = 'nerdy-town:v1'
+const KEY = 'nerdy-town:v2' // v2: socials replace phone numbers
 
 export interface State {
   accounts: Record<string, Account>
@@ -226,7 +226,6 @@ export const api = {
       name: 'Newton Byte',
       age: 26,
       gender: 'Man',
-      pronouns: 'he/him',
       lookingFor: 'Everyone',
       city: 'Brooklyn, NY',
       nerdClass: 'Code Wizard',
@@ -235,7 +234,10 @@ export const api = {
       interests: ['TypeScript', 'Mech keyboards', 'Sci-fi', 'Coffee'],
       photos: [],
       avatar: seedAvatar('newton-demo'),
-      phone: '+1 (555) 010-4242',
+      socials: [
+        { platform: 'Instagram', handle: 'newton.byte' },
+        { platform: 'Telegram', handle: 'newtonbyte' },
+      ],
     })
     return state.accounts[id]
   },
@@ -244,14 +246,14 @@ export const api = {
     set((s) => ({ ...s, session: null }))
   },
 
-  saveProfile(data: Omit<Profile, 'id' | 'joinedAt' | 'rejectionsGiven' | 'rejectionsReceived' | 'accepts' | 'distanceKm'>) {
+  saveProfile(data: Omit<Profile, 'id' | 'joinedAt' | 'rejectionsGiven' | 'rejectionsReceived' | 'accepts'>) {
     const id = state.session
     if (!id) throw new Error('Log in first.')
     set((s) => {
       const existing = s.profiles[id]
       const profile: Profile = existing
         ? { ...existing, ...data }
-        : { ...data, id, joinedAt: Date.now(), rejectionsGiven: 0, rejectionsReceived: 0, accepts: 0, distanceKm: 0 }
+        : { ...data, id, joinedAt: Date.now(), rejectionsGiven: 0, rejectionsReceived: 0, accepts: 0 }
       let n: State = {
         ...s,
         profiles: { ...s.profiles, [id]: profile },
@@ -390,9 +392,9 @@ export function relationWith(s: State, other: string) {
   return reqs[0] ?? null
 }
 
-/** A phone number is only ever returned when the request between you two was accepted. */
-export function revealedPhone(s: State, other: string): string | null {
+/** Socials are only ever returned when the request between you two was accepted. */
+export function revealedSocials(s: State, other: string): Social[] | null {
   const r = relationWith(s, other)
   if (!r || r.status !== 'accepted') return null
-  return s.profiles[other]?.phone ?? null
+  return s.profiles[other]?.socials ?? null
 }
