@@ -1,9 +1,10 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeft, BadgeCheck, Calendar, Check, Flame, HeartHandshake, MapPin, PencilLine, Send, Share2, Sparkles, Swords, X } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Ban, Bot, Calendar, Check, Flag, Flame, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, Sparkles, Swords, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
+import Loader from '../components/Loader'
 import Modal from '../components/Modal'
 import OutcomeModal from '../components/Outcome'
 import SocialsReveal, { LockedSocials } from '../components/SocialsReveal'
@@ -12,6 +13,8 @@ import { useToast } from '../components/Toast'
 import { api, dailyInfo, relationWith, revealedSocials, selectMe, useStore } from '../lib/store'
 import type { Profile } from '../lib/types'
 import NotFound from './NotFound'
+
+const REPORT_REASONS = ['Fake profile', 'Harassment', 'Inappropriate photos', 'Underage', 'Spam or scam', 'Other']
 
 function Gallery({ profile }: { profile: Profile }) {
   const count = Math.max(profile.photos.length, profile.photos.length ? 1 : 3)
@@ -83,6 +86,11 @@ export default function ProfilePage() {
   const rel = relationWith(s, id)
   const socials = revealedSocials(s, id)
   const [confirm, setConfirm] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [menu, setMenu] = useState<null | 'menu' | 'report' | 'block'>(null)
+  const [reason, setReason] = useState(REPORT_REASONS[0])
+  const [details, setDetails] = useState('')
+  const [modBusy, setModBusy] = useState(false)
   const [outcome, setOutcome] = useState<null | 'accepted' | 'rejected'>(null)
   const prevStatus = useRef(rel?.status)
 
@@ -95,26 +103,56 @@ export default function ProfilePage() {
     prevStatus.current = rel?.status
   }, [rel, s.session])
 
-  if (!profile) return <NotFound />
+  if (!profile) return s.ready ? <NotFound /> : <Loader />
 
   const isMe = s.session === id
-  const daily = me ? dailyInfo(s, me.id) : null
+  const daily = me ? dailyInfo(s) : null
   const back = () => ((loc.key !== 'default' ? nav(-1) : nav('/explore')))
 
-  const send = () => {
+  const send = async () => {
+    setSending(true)
     try {
-      api.sendRequest(id)
-      setConfirm(false)
-      toast('info', 'Request sent! 🚀', `${profile.name.split(' ')[0]} is thinking about it…`)
+      await api.sendRequest(id)
+      toast('info', 'Request sent! 🚀', `${profile.name.split(' ')[0]} will see it on their dashboard.`)
     } catch (e) {
+      toast('error', (e as Error).message)
+    } finally {
+      setSending(false)
       setConfirm(false)
+    }
+  }
+  const respond = async (st: 'accepted' | 'rejected') => {
+    if (!rel) return
+    try {
+      await api.respond(rel.id, st === 'accepted')
+      toast(st === 'accepted' ? 'success' : 'info', st === 'accepted' ? 'Accepted! They can now see your socials.' : 'Rejected. You just made them more popular 😇')
+    } catch (e) {
       toast('error', (e as Error).message)
     }
   }
-  const respond = (st: 'accepted' | 'rejected') => {
-    if (!rel) return
-    api.respond(rel.id, st)
-    toast(st === 'accepted' ? 'success' : 'info', st === 'accepted' ? 'Accepted! They can now see your socials.' : 'Rejected. You just made them more popular 😇')
+  const submitReport = async () => {
+    setModBusy(true)
+    try {
+      await api.report(id, reason, details)
+      toast('success', 'Report sent', 'Thanks — our moderators will take a look.')
+      setMenu(null)
+      setDetails('')
+    } catch (e) {
+      toast('error', (e as Error).message)
+    } finally {
+      setModBusy(false)
+    }
+  }
+  const doBlock = async () => {
+    setModBusy(true)
+    try {
+      await api.block(id)
+      toast('info', `${profile.name.split(' ')[0]} is blocked`, 'You won’t see each other anymore.')
+      nav('/explore', { replace: true })
+    } catch (e) {
+      toast('error', (e as Error).message)
+      setModBusy(false)
+    }
   }
   const share = async () => {
     const url = location.href
@@ -199,9 +237,16 @@ export default function ProfilePage() {
           </span>
           Back to search
         </button>
-        <button onClick={share} className="rounded-full border border-white/10 bg-white/5 p-2.5 hover:bg-white/10" aria-label="Share profile">
-          <Share2 className="h-4 w-4" />
-        </button>
+        <div className="flex gap-2">
+          <button onClick={share} className="rounded-full border border-white/10 bg-white/5 p-2.5 hover:bg-white/10" aria-label="Share profile">
+            <Share2 className="h-4 w-4" />
+          </button>
+          {s.session && !isMe && !profile.isBot && (
+            <button onClick={() => setMenu('menu')} className="rounded-full border border-white/10 bg-white/5 p-2.5 hover:bg-white/10" aria-label="Report or block">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] md:gap-10">
@@ -215,6 +260,11 @@ export default function ProfilePage() {
               <span className="chip border-carrot/40 bg-carrot/10 text-carrot">
                 <Sparkles className="h-3.5 w-3.5" /> {profile.nerdClass}
               </span>
+              {profile.isBot && (
+                <span className="chip border-grape/40 bg-grape/10 text-grape-300" title="Sample resident run by Nerdy Town">
+                  <Bot className="h-3.5 w-3.5" /> Bot
+                </span>
+              )}
               {profile.verified && (
                 <span className="chip border-byte/40 bg-byte/10 text-byte">
                   <BadgeCheck className="h-3.5 w-3.5" /> Verified nerd
@@ -268,7 +318,11 @@ export default function ProfilePage() {
           <section className="mt-6">
             <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-white/50">Socials</h2>
             {isMe ? (
-              <SocialsReveal socials={profile.socials} label="Your socials (private)" />
+              <SocialsReveal socials={s.myContacts} label="Your socials (private)" />
+            ) : profile.isBot ? (
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
+                <Bot className="h-5 w-5 shrink-0 text-grape-300" /> Bot account — no socials. It answers requests so you can try Nerdy Town.
+              </div>
             ) : socials ? (
               <SocialsReveal socials={socials} />
             ) : (
@@ -293,8 +347,8 @@ export default function ProfilePage() {
           )}
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button onClick={() => setConfirm(false)} className="btn-ghost">Not yet</button>
-            <button onClick={send} className="btn-primary" disabled={!daily?.left}>
-              <Send className="h-4 w-4" /> Send it
+            <button onClick={send} className="btn-primary" disabled={!daily?.left || sending}>
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send it
             </button>
           </div>
           {daily && !daily.left && (
@@ -303,6 +357,54 @@ export default function ProfilePage() {
             </p>
           )}
         </div>
+      </Modal>
+
+      <Modal open={!!menu} onClose={() => setMenu(null)} title="Report or block">
+        {menu === 'menu' && (
+          <div>
+            <h2 className="text-2xl font-bold">{profile.name.split(' ')[0]}</h2>
+            <p className="mt-1 text-sm text-white/60">Something off? Let us know or make them disappear.</p>
+            <div className="mt-6 space-y-2">
+              <button onClick={() => setMenu('report')} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:bg-white/[0.06]">
+                <Flag className="h-5 w-5 text-carrot" />
+                <span><b>Report</b><br /><span className="text-sm text-white/50">Tell the moderators what happened.</span></span>
+              </button>
+              <button onClick={() => setMenu('block')} className="flex w-full items-center gap-3 rounded-2xl border border-rizz/30 bg-rizz/5 p-4 text-left hover:bg-rizz/10">
+                <Ban className="h-5 w-5 text-rizz" />
+                <span><b>Block</b><br /><span className="text-sm text-white/50">You’ll no longer see each other.</span></span>
+              </button>
+            </div>
+          </div>
+        )}
+        {menu === 'report' && (
+          <div>
+            <h2 className="text-2xl font-bold">Report {profile.name.split(' ')[0]}</h2>
+            <label className="label mt-5" htmlFor="reason">Reason</label>
+            <select id="reason" value={reason} onChange={(e) => setReason(e.target.value)} className="input">
+              {REPORT_REASONS.map((r) => (
+                <option key={r} value={r} className="bg-ink-800">{r}</option>
+              ))}
+            </select>
+            <label className="label mt-4" htmlFor="details">Details (optional)</label>
+            <textarea id="details" value={details} onChange={(e) => setDetails(e.target.value.slice(0, 500))} className="input min-h-[100px] resize-none" placeholder="What happened?" />
+            <button onClick={submitReport} disabled={modBusy} className="btn-primary mt-5 w-full">
+              {modBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />} Send report
+            </button>
+          </div>
+        )}
+        {menu === 'block' && (
+          <div className="text-center">
+            <Ban className="mx-auto h-10 w-10 text-rizz" />
+            <h2 className="mt-3 text-2xl font-bold">Block {profile.name.split(' ')[0]}?</h2>
+            <p className="mt-2 text-white/60">You won’t see each other in Explore, and neither of you can send requests. Pending requests between you are removed.</p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => setMenu(null)} className="btn-ghost">Cancel</button>
+              <button onClick={doBlock} disabled={modBusy} className="btn w-full bg-rizz text-ink-950">
+                {modBusy && <Loader2 className="h-4 w-4 animate-spin" />} Block
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {me && outcome && <OutcomeModal open={!!outcome} onClose={() => setOutcome(null)} status={outcome} other={profile} me={me} phase={s.phase} />}

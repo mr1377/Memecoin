@@ -9,41 +9,48 @@ Utility platform for the **$NERDY** meme coin. Send a partner request to anyone:
 
 ## Stack
 
-Vite · React 18 · TypeScript · Tailwind CSS · Framer Motion · lucide-react
+- **Frontend:** Vite · React 18 · TypeScript · Tailwind CSS · Framer Motion, hosted on Vercel
+- **Backend:** [Supabase](https://supabase.com), which provides:
+  - Postgres with row-level security,
+  - email/password auth with confirmation and password reset,
+  - photo storage,
+  - realtime updates for requests.
+- **Payouts (Phase 2):** a Vercel serverless function (`api/approve-withdrawal.ts`) sends SPL / Token-2022 transfers from a treasury wallet.
+
+**First-time setup: follow [SETUP.md](SETUP.md).**
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # typecheck + production build in dist/
+cp .env.example .env.local   # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+npm run dev                  # http://localhost:5173
+npm run build                # typecheck (app + api) + production build
 ```
-
-SPA rewrites are included for Vercel (`vercel.json`) and Netlify (`public/_redirects`).
 
 ## Pages
 
 | Route | Page |
 | --- | --- |
-| `/` | Marketing landing: interactive mascot, win-win simulator, roadmap, hall of fame, FAQ |
-| `/explore` | Search, filter chips (All / Nearby = your city/region / New / Popular), gender filter, 3D-tilt profile grid |
-| `/u/:id` | Profile detail: swipeable gallery, city, stats, About, interests, locked/revealed socials, Send Request |
-| `/signup`, `/login` | Auth (required before a profile can be created) + one-click demo account |
+| `/` | Landing: interactive mascot, win-win simulator, roadmap, live stats, Hall of Fame, FAQ |
+| `/explore` | Search, filter chips (All / Nearby = your city/region / New / Popular), gender filter |
+| `/u/:id` | Profile: photos, city, stats, About, interests, locked/revealed socials, Send Request, Report / Block |
+| `/signup`, `/login` | Email + password with confirmation email and "forgot password" |
+| `/reset-password` | Choose a new password from the reset email |
 | `/onboarding` | 4-step profile wizard (basics, photos / avatar builder, vibe, private socials) — also used to edit |
-| `/dashboard` | Popularity/matches counters, incoming/sent/matches/L-log, daily request ring, $NERDY balance, wallet connect & withdraw |
+| `/dashboard` | Counters, incoming / sent / matches / L-log, daily requests, $NERDY balance, wallet, withdraw, delete account |
+| `/admin` | Admins only: phase & token settings, withdrawal approvals, reports, verification |
 
-## Phase logic
+## Where the rules live
 
-All rules live in `src/lib/store.ts`:
+Everything that matters is enforced in the database (`supabase/schema.sql`), not in the browser:
 
-- `FREE_DAILY_REQUESTS = 3` (reset at midnight UTC), one request per person, ever.
-- Phase 1: rejection → `rejectionsReceived + 1` (public popularity).
-- Phase 2: rejection also pays `REJECT_REWARD = 100` $NERDY; extra requests cost `EXTRA_REQUEST_COST = 250`; withdraw to a connected Solana wallet (min 500).
-- Socials are only returned by `revealedSocials()` when the request between the two users is `accepted`.
+- **Daily limit:** `free_daily_requests` per UTC day, plus requests bought in Phase 2.
+- **One request per pair of people, ever.**
+- **Socials** (`contacts` table) are readable only by their owner and by people whose request that owner accepted.
+- **Counters** (popularity, matches, hearts broken), **balances** and **verified badges** can't be written by users.
+- **Phase 2:** a rejection by a real user pays `reject_reward` $NERDY. Bots never pay.
+- **Withdrawals** reserve the balance immediately and wait for admin approval, which prevents double-spending.
+- **Blocking** hides both people from each other and prevents requests between them.
 
-## Current backend = local mock
-
-This is a front-end build. Data is stored in `localStorage` via a small mock API (`api.*` in `store.ts`) with 24 seeded residents
-that answer your requests after a few seconds so the whole loop is playable. Password hashing, wallet connection (Phantom is used
-if installed, others are simulated) and withdrawals are **demo-grade** — before launch, replace `api` with a real backend
-(auth, server-side socials privacy, on-chain payouts). The footer and dashboard include demo controls to switch phases and reset data.
+Bots (`supabase/bots.sql`) are labelled sample residents that answer requests after a few seconds. They have no socials and are excluded from stats and the Hall of Fame.
 
 Avatars are procedurally generated SVG caricatures (`NerdAvatar.tsx`); users can also upload up to 4 photos.

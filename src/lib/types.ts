@@ -33,14 +33,15 @@ export interface Profile {
   tagline: string
   bio: string
   interests: string[]
-  photos: string[] // data URLs (uploads) — empty means generated avatar
+  photos: string[] // public URLs — empty means generated avatar
+  photoPaths: string[] // storage paths backing `photos`
   avatar: AvatarSeed
-  socials: Social[] // private until accepted
   joinedAt: number
   rejectionsGiven: number
   rejectionsReceived: number
   accepts: number
   verified?: boolean
+  isBot?: boolean
 }
 
 export type SocialPlatform = 'Instagram' | 'X' | 'Telegram' | 'Snapchat' | 'Discord' | 'TikTok' | 'WhatsApp' | 'Email'
@@ -62,23 +63,42 @@ export interface PartnerRequest {
   seen?: boolean
 }
 
-export interface Account {
-  id: string // same as profile id
-  email: string
-  passHash: string
-  createdAt: number
-  hasProfile: boolean
-}
-
 export interface Wallet {
   address: string
-  provider: 'Phantom' | 'Solflare' | 'Backpack'
+  provider: WalletProvider
 }
+
+export type WalletProvider = 'Phantom' | 'Solflare' | 'Backpack'
 
 export interface LedgerEntry {
   id: string
   at: number
-  kind: 'reject-reward' | 'buy-requests' | 'withdraw' | 'airdrop'
+  kind: 'reject-reward' | 'buy-requests' | 'withdraw' | 'adjustment'
   amount: number
   note: string
+  status: 'done' | 'requested' | 'processing' | 'sent' | 'failed' | 'rejected'
+  txSig?: string | null
+  wallet?: string | null
+  userId?: string
+}
+
+export interface Settings {
+  phase: 1 | 2
+  bondingProgress: number
+  freeDailyRequests: number
+  rejectReward: number
+  extraRequestCost: number
+  minWithdraw: number
+  tokenMint: string | null
+  tokenDecimals: number
+}
+
+export interface Report {
+  id: string
+  reporter: string
+  reported: string
+  reason: string
+  details: string
+  resolved: boolean
+  createdAt: number
 }

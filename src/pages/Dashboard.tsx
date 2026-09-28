@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, Check, Clock, Coins, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LogOut, Minus, PencilLine, Plus, Rocket, Send, Swords, Unplug, Wallet as WalletIcon, X } from 'lucide-react'
+import { ArrowUpRight, Check, Clock, Coins, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LogOut, Minus, PencilLine, Plus, Rocket, Send, Swords, Trash2, Unplug, Wallet as WalletIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AnimatedNumber from '../components/AnimatedNumber'
@@ -12,7 +12,7 @@ import { Scramble, SocialIcon } from '../components/SocialsReveal'
 import { displayHandle, socialUrl } from '../lib/socials'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
-import { EXTRA_REQUEST_COST, MIN_WITHDRAW, REJECT_REWARD, api, dailyInfo, selectMe, useStore } from '../lib/store'
+import { api, dailyInfo, selectMe, useStore } from '../lib/store'
 import type { PartnerRequest, Profile, Wallet } from '../lib/types'
 
 function timeAgo(t: number) {
@@ -106,10 +106,12 @@ export default function Dashboard() {
   const [busy, setBusy] = useState<string | false>(false)
   const [outcome, setOutcome] = useState<PartnerRequest | null>(null)
 
-  const daily = dailyInfo(s, me.id)
-  const balance = s.balances[me.id] ?? 0
-  const wallet = s.wallets[me.id] ?? null
-  const ledger = s.ledger[me.id] ?? []
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteText, setDeleteText] = useState('')
+
+  const daily = dailyInfo(s)
+  const { balance, wallet, ledger } = s
+  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, rejectReward: REJECT_REWARD } = s.settings
 
   const { incoming, sent, matches, ls, pendingSent } = useMemo(() => {
     const mine = s.requests.filter((r) => r.from === me.id || r.to === me.id)
@@ -131,9 +133,14 @@ export default function Dashboard() {
   }, [unseen, outcome])
 
   const P = (id: string) => s.profiles[id] as Profile | undefined
+  const socialsOf = (id: string) => s.contacts[id] ?? []
 
-  const respond = (r: PartnerRequest, st: 'accepted' | 'rejected') => {
-    api.respond(r.id, st)
+  const respond = async (r: PartnerRequest, st: 'accepted' | 'rejected') => {
+    try {
+      await api.respond(r.id, st === 'accepted')
+    } catch (e) {
+      return toast('error', (e as Error).message)
+    }
     const n = P(r.from)?.name.split(' ')[0]
     if (st === 'accepted') {
       confetti({ count: 80, emoji: ['💘', '💬'] })
@@ -141,9 +148,9 @@ export default function Dashboard() {
     } else toast('info', `You passed on ${n}.`, 'Their popularity just went up. You’re a good person.')
   }
 
-  const buy = () => {
+  const buy = async () => {
     try {
-      api.buyRequests(buyN)
+      await api.buyRequests(buyN)
       toast('win', `+${buyN} request${buyN > 1 ? 's' : ''} unlocked`, `Spent ${(buyN * EXTRA_REQUEST_COST).toLocaleString()} $NERDY`)
     } catch (e) {
       toast('error', (e as Error).message)
@@ -170,7 +177,7 @@ export default function Dashboard() {
       setWithdrawOpen(false)
       setAmount('')
       confetti({ colors: ['#ff7a1a', '#ffd166', '#fff'], emoji: ['🪙'] })
-      toast('win', 'Withdrawal sent!', `${Number(amount).toLocaleString()} $NERDY is on its way.`)
+      toast('win', 'Withdrawal requested!', `${Number(amount).toLocaleString()} $NERDY — payouts are reviewed and sent, usually within 24h.`)
     } catch (e) {
       toast('error', (e as Error).message)
     } finally {
@@ -204,13 +211,16 @@ export default function Dashboard() {
             <PencilLine className="h-3.5 w-3.5" /> Edit profile
           </Link>
           <button
-            onClick={() => {
-              api.logout()
+            onClick={async () => {
+              await api.logout()
               nav('/')
             }}
             className="chip py-2 hover:text-white"
           >
             <LogOut className="h-3.5 w-3.5" /> Log out
+          </button>
+          <button onClick={() => setDeleteOpen(true)} className="chip py-2 text-white/50 hover:border-rizz/50 hover:text-rizz">
+            <Trash2 className="h-3.5 w-3.5" /> Delete account
           </button>
         </div>
       </div>
@@ -228,9 +238,11 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        <button onClick={() => api.setPhase(s.phase === 1 ? 2 : 1)} className="chip shrink-0 self-start py-2 hover:text-white sm:self-auto" title="Demo only">
-          <Rocket className="h-3.5 w-3.5" /> Demo: {s.phase === 1 ? 'simulate graduation' : 'back to Phase 1'}
-        </button>
+        {s.isAdmin && (
+          <Link to="/admin" className="chip shrink-0 self-start py-2 hover:text-white sm:self-auto">
+            <Rocket className="h-3.5 w-3.5" /> Admin panel
+          </Link>
+        )}
       </motion.div>
 
       {/* stats */}
@@ -281,10 +293,14 @@ export default function Dashboard() {
                         </Link>
                         {tab === 'matches' ? (
                           outgoing ? (
-                            <p className="truncate text-sm text-lime">
-                              <Scramble text={o.socials[0] ? displayHandle(o.socials[0]) : ''} className="font-mono" />
-                              {o.socials.length > 1 && <span className="text-xs text-white/40"> +{o.socials.length - 1} more</span>}
-                            </p>
+                            o.isBot ? (
+                              <p className="text-xs text-white/50">Bot account — no socials</p>
+                            ) : (
+                              <p className="truncate text-sm text-lime">
+                                <Scramble text={socialsOf(o.id)[0] ? displayHandle(socialsOf(o.id)[0]) : '…'} className="font-mono" />
+                                {socialsOf(o.id).length > 1 && <span className="text-xs text-white/40"> +{socialsOf(o.id).length - 1} more</span>}
+                              </p>
+                            )
                           ) : (
                             <p className="text-xs text-white/50">You accepted — they can see your socials</p>
                           )
@@ -305,7 +321,7 @@ export default function Dashboard() {
                         </div>
                       ) : tab === 'matches' && outgoing ? (
                         <div className="flex gap-1.5">
-                          {o.socials.slice(0, 3).map((so) => {
+                          {socialsOf(o.id).slice(0, 3).map((so) => {
                             const url = socialUrl(so)
                             const copy = () => navigator.clipboard?.writeText(displayHandle(so)).then(() => toast('success', `${so.platform} copied`, displayHandle(so)))
                             return url ? (
@@ -434,8 +450,19 @@ export default function Dashboard() {
                   <ul className="max-h-48 space-y-2 overflow-y-auto pr-1">
                     {ledger.slice(0, 20).map((e) => (
                       <li key={e.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="truncate text-white/70">{e.note}</span>
-                        <span className={clsx('shrink-0 font-mono font-semibold', e.amount > 0 ? 'text-lime' : 'text-white/50')}>
+                        <span className="min-w-0 truncate text-white/70">
+                          {e.note}
+                          {e.kind === 'withdraw' && (
+                            <span className={clsx('ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase', e.status === 'sent' ? 'bg-lime/15 text-lime' : e.status === 'failed' || e.status === 'rejected' ? 'bg-rizz/15 text-rizz' : 'bg-byte/15 text-byte')}>
+                              {e.txSig ? (
+                                <a href={`https://solscan.io/tx/${e.txSig}`} target="_blank" rel="noopener noreferrer" className="underline">{e.status}</a>
+                              ) : (
+                                e.status
+                              )}
+                            </span>
+                          )}
+                        </span>
+                        <span className={clsx('shrink-0 font-mono font-semibold', e.amount > 0 ? 'text-lime' : 'text-white/50', (e.status === 'failed' || e.status === 'rejected') && 'line-through opacity-50')}>
                           {e.amount > 0 ? '+' : ''}
                           {e.amount.toLocaleString()}
                         </span>
@@ -468,7 +495,7 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-        <p className="mt-4 text-center text-xs text-white/40">Demo mode: non-Phantom wallets use a simulated address.</p>
+        <p className="mt-4 text-center text-xs text-white/40">On mobile, this opens the site inside your wallet app. We only store your public address.</p>
       </Modal>
 
       {/* withdraw modal */}
@@ -481,8 +508,37 @@ export default function Dashboard() {
         </div>
         {wallet && <p className="mt-3 text-xs text-white/50">To {wallet.provider} · {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}</p>}
         <button onClick={withdraw} disabled={busy === 'withdraw' || !amount} className="btn-primary mt-6 w-full py-4">
-          {busy === 'withdraw' ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUpRight className="h-5 w-5" />} Withdraw
+          {busy === 'withdraw' ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUpRight className="h-5 w-5" />} Request withdrawal
         </button>
+        <p className="mt-3 text-center text-xs text-white/40">Withdrawals are reviewed for abuse before they’re sent on-chain, usually within 24h.</p>
+      </Modal>
+
+      {/* delete account modal */}
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete account">
+        <div className="text-center">
+          <Trash2 className="mx-auto h-10 w-10 text-rizz" />
+          <h2 className="mt-3 text-2xl font-bold">Delete your account?</h2>
+          <p className="mt-2 text-white/60">Your profile, photos, socials, requests and $NERDY balance are permanently removed. This can’t be undone.</p>
+          <label className="label mt-5 text-left" htmlFor="del">Type DELETE to confirm</label>
+          <input id="del" className="input font-mono" value={deleteText} onChange={(e) => setDeleteText(e.target.value)} autoComplete="off" />
+          <button
+            disabled={deleteText !== 'DELETE' || busy === 'delete'}
+            onClick={async () => {
+              setBusy('delete')
+              try {
+                await api.deleteAccount()
+                toast('info', 'Account deleted', 'Sorry to see you go, legend.')
+                nav('/', { replace: true })
+              } catch (e) {
+                toast('error', (e as Error).message)
+                setBusy(false)
+              }
+            }}
+            className="btn mt-5 w-full bg-rizz py-4 text-ink-950"
+          >
+            {busy === 'delete' && <Loader2 className="h-5 w-5 animate-spin" />} Delete forever
+          </button>
+        </div>
       </Modal>
 
       {outcome && P(outcome.to) && (

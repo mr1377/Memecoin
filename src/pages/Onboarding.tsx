@@ -9,7 +9,7 @@ import NerdAvatar from '../components/NerdAvatar'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
 import { AVATAR_OPTIONS, seedAvatar } from '../lib/avatar'
-import { api, selectMe, uid, useStore } from '../lib/store'
+import { api, selectMe, useStore, type PhotoDraft } from '../lib/store'
 import type { AvatarSeed, Gender, NerdClass, Profile, Social } from '../lib/types'
 import { PLATFORMS, platformInfo, validateSocial } from '../lib/socials'
 import { SocialIcon } from '../components/SocialsReveal'
@@ -29,7 +29,10 @@ const CLASSES: { id: NerdClass; emoji: string }[] = [
 const SUGGESTED = ['Programming', 'D&D', 'Anime', 'Chess', 'Sci-fi', 'Math', 'Board games', 'Retro games', 'Space', 'Linux', 'Cosplay', 'Physics', 'Manga', 'Lego', 'Crypto', 'Books', 'Coffee', 'Robotics']
 const STEPS = ['Basics', 'Photos', 'Vibe', 'Private']
 
-async function resizeImage(file: File, max = 720): Promise<string> {
+const uid = () => crypto.randomUUID()
+
+/** Downscale to max 1080px JPEG before upload (keeps storage + bandwidth small, strips EXIF). */
+async function resizeImage(file: File, max = 1080): Promise<PhotoDraft> {
   const url = URL.createObjectURL(file)
   try {
     const img = await new Promise<HTMLImageElement>((res, rej) => {
@@ -43,7 +46,8 @@ async function resizeImage(file: File, max = 720): Promise<string> {
     c.width = Math.round(img.width * scale)
     c.height = Math.round(img.height * scale)
     c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-    return c.toDataURL('image/jpeg', 0.78)
+    const blob = await new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', 0.82))
+    return { blob, url: URL.createObjectURL(blob) }
   } finally {
     URL.revokeObjectURL(url)
   }
@@ -81,6 +85,7 @@ function Field({ label, children, hint, error }: { label: string; children: Reac
 
 export default function Onboarding() {
   const existing = useStore(selectMe)
+  const myContacts = useStore((s) => s.myContacts)
   const nav = useNavigate()
   const [params] = useSearchParams()
   const toast = useToast()
@@ -96,13 +101,13 @@ export default function Onboarding() {
     age: existing?.age ? String(existing.age) : '',
     gender: existing?.gender ?? ('Man' as Gender),
     lookingFor: existing?.lookingFor ?? ('Everyone' as Profile['lookingFor']),
-    photos: existing?.photos ?? ([] as string[]),
+    photos: (existing?.photoPaths ?? []).map((path, i) => ({ path, url: existing!.photos[i] })) as PhotoDraft[],
     avatar: existing?.avatar ?? seedAvatar(uid()),
     nerdClass: existing?.nerdClass ?? ('Code Wizard' as NerdClass),
     tagline: existing?.tagline ?? '',
     bio: existing?.bio ?? '',
     interests: existing?.interests ?? ([] as string[]),
-    socials: existing?.socials ?? ([] as Social[]),
+    socials: myContacts as Social[],
     city: existing?.city ?? '',
   }))
   const [tagDraft, setTagDraft] = useState('')
@@ -147,22 +152,23 @@ export default function Onboarding() {
   const finish = async () => {
     if (!validate(3)) return
     setBusy(true)
-    await new Promise((r) => setTimeout(r, 600))
     try {
-      api.saveProfile({
-        name: form.name.trim(),
-        age: Number(form.age),
-        gender: form.gender,
-        lookingFor: form.lookingFor,
-        photos: form.photos,
-        avatar: form.avatar,
-        nerdClass: form.nerdClass,
-        tagline: form.tagline.trim(),
-        bio: form.bio.trim(),
-        interests: form.interests,
-        socials: form.socials.map((so) => ({ ...so, handle: so.handle.trim() })),
-        city: form.city.trim(),
-      })
+      await api.saveProfile(
+        {
+          name: form.name.trim(),
+          age: Number(form.age),
+          gender: form.gender,
+          lookingFor: form.lookingFor,
+          avatar: form.avatar,
+          nerdClass: form.nerdClass,
+          tagline: form.tagline.trim(),
+          bio: form.bio.trim(),
+          interests: form.interests,
+          city: form.city.trim(),
+        },
+        form.photos,
+        form.socials.map((so) => ({ ...so, handle: so.handle.trim() })),
+      )
       confetti({ emoji: ['🤓', '🎉', '👓'] })
       toast('win', editing ? 'Profile updated.' : 'You’re officially a resident!', editing ? undefined : 'Check your dashboard — you already have admirers.')
       nav(editing ? '/dashboard' : params.get('next') || '/dashboard', { replace: true })
@@ -178,8 +184,8 @@ export default function Onboarding() {
     const room = 4 - form.photos.length
     const picked = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, room)
     try {
-      const urls = await Promise.all(picked.map((f) => resizeImage(f)))
-      up('photos', [...form.photos, ...urls])
+      const drafts = await Promise.all(picked.map((f) => resizeImage(f)))
+      up('photos', [...form.photos, ...drafts])
     } catch {
       toast('error', 'Could not read that image.')
     }
@@ -195,7 +201,7 @@ export default function Onboarding() {
   const preview = {
     ...form,
     name: form.name || 'Your Name',
-    photos: form.photos,
+    photos: form.photos.map((p) => p.url),
   }
 
   const steps: ReactNode[] = [
@@ -220,8 +226,8 @@ export default function Onboarding() {
       <Field label="Your photos" hint="Up to 4. First photo is your cover. No photos? Your generated nerd becomes your face.">
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {form.photos.map((p, i) => (
-            <motion.div layout key={p.slice(-24) + i} className="group relative aspect-[3/4] overflow-hidden rounded-2xl border border-white/10">
-              <img src={p} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+            <motion.div layout key={p.url} className="group relative aspect-[3/4] overflow-hidden rounded-2xl border border-white/10">
+              <img src={p.url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
               {i === 0 && <span className="absolute left-1.5 top-1.5 rounded-full bg-carrot px-2 py-0.5 text-[10px] font-bold text-ink-950">Cover</span>}
               <button type="button" onClick={() => up('photos', form.photos.filter((_, k) => k !== i))} className="absolute right-1.5 top-1.5 rounded-full bg-ink-950/80 p-1.5 text-white/80 hover:text-rizz" aria-label="Remove photo">
                 <Trash2 className="h-3.5 w-3.5" />
@@ -448,7 +454,7 @@ export default function Onboarding() {
         </div>
         <button
           onClick={() => {
-            api.logout()
+            void api.logout()
             nav('/')
           }}
           className="chip shrink-0 hover:text-white"

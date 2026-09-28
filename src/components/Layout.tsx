@@ -19,10 +19,16 @@ export function TopNav() {
   const me = useStore(selectMe)
   const session = useStore((s) => s.session)
   const unread = useUnread()
+  const offline = useStore((s) => s.offline)
   const link = ({ isActive }: { isActive: boolean }) =>
     clsx('relative rounded-full px-4 py-2 text-sm font-semibold transition', isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white')
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-ink-900/70 backdrop-blur-xl">
+      {offline && (
+        <div className="bg-rizz px-4 py-1.5 text-center text-xs font-semibold text-ink-950" role="status">
+          Can’t reach the Nerdy Town servers right now — retrying…
+        </div>
+      )}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <Logo />
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">

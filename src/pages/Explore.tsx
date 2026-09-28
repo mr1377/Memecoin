@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Compass, Flame, MapPin, Search, Sparkles, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
 import Mascot from '../components/Mascot'
@@ -29,11 +29,10 @@ export default function Explore() {
   const f = (FILTERS.some((x) => x.id === params.get('f')) ? params.get('f') : 'all') as FilterId
   const g = (params.get('g') ?? 'Everyone') as Gender | 'Everyone'
   const s = useStore((x) => x)
-  const [loading, setLoading] = useState(true)
+  const loading = !s.ready
   const input = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 450)
     const onKey = (e: KeyboardEvent) => {
       if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
         e.preventDefault()
@@ -42,7 +41,6 @@ export default function Explore() {
     }
     window.addEventListener('keydown', onKey)
     return () => {
-      clearTimeout(t)
       window.removeEventListener('keydown', onKey)
     }
   }, [])
@@ -80,12 +78,13 @@ export default function Explore() {
         arr = arr.sort((a, b) => b.rejectionsReceived - a.rejectionsReceived)
         break
       default:
-        arr = arr.sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b.joinedAt - a.joinedAt)
+        // Real residents first, then verified, then newest.
+        arr = arr.sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0) || (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b.joinedAt - a.joinedAt)
     }
     return arr
   }, [s.profiles, s.session, q, f, g, myCity])
 
-  const daily = s.session && s.profiles[s.session] ? dailyInfo(s, s.session) : null
+  const daily = s.session && s.profiles[s.session] ? dailyInfo(s) : null
 
   return (
     <Page className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 md:pt-10">

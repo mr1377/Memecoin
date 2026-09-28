@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion, useMotionValue, useScroll, useSpring, useTransform } from 'framer-motion'
-import { ArrowRight, Check, ChevronDown, Coins, Crown, Heart, Instagram, Lock, Rocket, Send, Shield, Sparkles, Trophy, UserPlus, X, Zap } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Coins, Crown, Heart, Instagram, Lock, Rocket, Send, Shield, Sparkles, Trophy, UserPlus, Zap } from 'lucide-react'
 import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../components/AnimatedNumber'
@@ -10,7 +10,7 @@ import { Glasses } from '../components/Logo'
 import Mascot from '../components/Mascot'
 import NerdAvatar from '../components/NerdAvatar'
 import ProfilePhoto from '../components/ProfilePhoto'
-import { EXTRA_REQUEST_COST, FREE_DAILY_REQUESTS, REJECT_REWARD, api, useStore } from '../lib/store'
+import { useStore } from '../lib/store'
 import { seedAvatar } from '../lib/avatar'
 
 const reveal = {
@@ -37,8 +37,11 @@ function FloatCard({ className, children, depth, mx, my }: { className: string; 
 }
 
 function Hero() {
+  const { rejectReward: REJECT_REWARD } = useStore((s) => s.settings)
   const profiles = useStore((s) => s.profiles)
-  const bots = useMemo(() => Object.values(profiles).filter((p) => p.id.startsWith('bot_')).slice(0, 5), [profiles])
+  const stats = useStore((s) => s.stats)
+  // Real residents first; bots fill the avatar stack until the town grows.
+  const faces = useMemo(() => Object.values(profiles).sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0)).slice(0, 5), [profiles])
   const mxRaw = useMotionValue(0)
   const myRaw = useMotionValue(0)
   const mx = useSpring(mxRaw, { stiffness: 80, damping: 20 })
@@ -110,14 +113,24 @@ function Hero() {
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="mt-8 flex items-center justify-center gap-3 lg:justify-start">
           <div className="flex -space-x-3">
-            {bots.map((p) => (
+            {faces.map((p) => (
               <ProfilePhoto key={p.id} profile={p} className="h-10 w-10 rounded-full border-2 border-ink-900" />
             ))}
           </div>
           <p className="text-left text-sm text-white/60">
-            <b className="text-white"><AnimatedNumber value={12480} /></b> rejections logged.
-            <br />
-            Every single one a W.
+            {stats.rejections > 0 ? (
+              <>
+                <b className="text-white"><AnimatedNumber value={stats.rejections} /></b> rejection{stats.rejections === 1 ? '' : 's'} logged.
+                <br />
+                Every single one a W.
+              </>
+            ) : (
+              <>
+                <b className="text-white">{stats.residents > 0 ? <AnimatedNumber value={stats.residents} /> : 'New'}</b> {stats.residents > 0 ? `nerd${stats.residents === 1 ? '' : 's'} in town.` : 'town, fresh doors.'}
+                <br />
+                Be the first legend.
+              </>
+            )}
           </p>
         </motion.div>
       </div>
@@ -186,6 +199,7 @@ function Marquee() {
 // ------------------------------------------------------------------ WIN-WIN DEMO
 
 function WinWinDemo() {
+  const { rejectReward: REJECT_REWARD } = useStore((s) => s.settings)
   const [state, setState] = useState<'idle' | 'sending' | 'accepted' | 'rejected'>('idle')
   const [pop, setPop] = useState(41)
   const [tokens, setTokens] = useState(0)
@@ -340,6 +354,7 @@ function WinWinDemo() {
 // ------------------------------------------------------------------ HOW IT WORKS
 
 function HowItWorks() {
+  const { freeDailyRequests: FREE_DAILY_REQUESTS } = useStore((s) => s.settings)
   const steps = [
     { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign up, add a photo (or generate your inner nerd), write a bio, pick your interests. Your socials stay locked.', color: 'from-grape to-byte' },
     { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot. ${FREE_DAILY_REQUESTS} free requests every day — more with $NERDY after graduation.`, color: 'from-carrot to-rizz' },
@@ -376,6 +391,7 @@ function HowItWorks() {
 // ------------------------------------------------------------------ ROADMAP
 
 function Roadmap() {
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, rejectReward: REJECT_REWARD, extraRequestCost: EXTRA_REQUEST_COST } = useStore((s) => s.settings)
   const phase = useStore((s) => s.phase)
   const pct = useStore((s) => s.bondingProgress)
   const ref = useRef<HTMLDivElement>(null)
@@ -479,7 +495,8 @@ function Roadmap() {
 
 function HallOfFame() {
   const profiles = useStore((s) => s.profiles)
-  const top = useMemo(() => Object.values(profiles).sort((a, b) => b.rejectionsReceived - a.rejectionsReceived).slice(0, 5), [profiles])
+  // Only real residents make the Hall of Fame.
+  const top = useMemo(() => Object.values(profiles).filter((p) => !p.isBot && p.rejectionsReceived > 0).sort((a, b) => b.rejectionsReceived - a.rejectionsReceived).slice(0, 5), [profiles])
   const max = top[0]?.rejectionsReceived || 1
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
@@ -493,6 +510,13 @@ function HallOfFame() {
           </Link>
         </motion.div>
         <motion.ol {...reveal} className="card divide-y divide-white/5 overflow-hidden">
+          {!top.length && (
+            <li className="flex flex-col items-center p-10 text-center">
+              <Trophy className="h-10 w-10 text-carrot" />
+              <p className="mt-3 font-display text-xl font-bold">The throne is empty.</p>
+              <p className="mt-1 text-sm text-white/50">Get rejected once and you’re on the board.</p>
+            </li>
+          )}
           {top.map((p, i) => (
             <li key={p.id}>
               <Link to={`/u/${p.id}`} className="group flex items-center gap-4 p-4 transition hover:bg-white/[0.03] sm:p-5">
@@ -517,6 +541,7 @@ function HallOfFame() {
 // ------------------------------------------------------------------ FAQ
 
 function FAQ() {
+  const { freeDailyRequests: FREE_DAILY_REQUESTS } = useStore((s) => s.settings)
   const qs = [
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
     ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. After $NERDY graduates, each rejection also pays you in tokens.'],
@@ -581,7 +606,7 @@ function FinalCTA() {
 }
 
 export function Footer() {
-  const phase = useStore((s) => s.phase)
+  const isAdmin = useStore((s) => s.isAdmin)
   return (
     <footer className="mx-auto max-w-7xl px-4 pb-10 pt-10 text-sm text-white/40 sm:px-6">
       <div className="flex flex-col gap-6 border-t border-white/10 pt-8 md:flex-row md:items-start md:justify-between">
@@ -591,22 +616,11 @@ export function Footer() {
           </p>
           <p className="mt-2">$NERDY is a meme coin with no intrinsic value or expectation of financial return. Not financial advice. Be kind — every nerd here is somebody’s favorite nerd.</p>
         </div>
-        <div className="rounded-2xl border border-dashed border-white/15 p-4">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-white/50">Demo controls</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={() => api.setPhase(phase === 1 ? 2 : 1)} className="chip hover:border-carrot/50 hover:text-white">
-              <Rocket className="h-3.5 w-3.5" /> Switch to Phase {phase === 1 ? 2 : 1}
-            </button>
-            <button
-              onClick={() => {
-                if (confirm('Reset all local demo data?')) api.resetAll()
-              }}
-              className="chip hover:border-rizz/50 hover:text-white"
-            >
-              <X className="h-3.5 w-3.5" /> Reset data
-            </button>
-          </div>
-        </div>
+        {isAdmin && (
+          <Link to="/admin" className="chip self-start py-2 hover:border-carrot/50 hover:text-white">
+            <Rocket className="h-3.5 w-3.5" /> Admin panel
+          </Link>
+        )}
       </div>
       <p className="mt-8 flex items-center gap-2">
         <Lock className="h-3.5 w-3.5" /> Socials are only revealed on accept. © {new Date().getFullYear()} Nerdy Town.

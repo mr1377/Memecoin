@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { motion, useMotionTemplate, useMotionValue, useSpring } from 'framer-motion'
-import { BadgeCheck, Flame, MapPin } from 'lucide-react'
+import { BadgeCheck, Bot, Flame, MapPin } from 'lucide-react'
 import type { PointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { PartnerRequest, Profile } from '../lib/types'
@@ -62,7 +62,11 @@ export default function ProfileCard({ profile, relation, me, index = 0 }: { prof
               <span className="flex items-center gap-1 rounded-full bg-ink-950/70 px-2 py-1 font-mono text-[10px] font-bold text-rizz-300 backdrop-blur" title="Popularity (rejections received)">
                 <Flame className="h-3 w-3" /> {profile.rejectionsReceived}
               </span>
-              {st && <span className={clsx('rounded-full px-2 py-1 text-[10px] font-bold uppercase shadow', st.cls)}>{st.label}</span>}
+              {st ? (
+                <span className={clsx('rounded-full px-2 py-1 text-[10px] font-bold uppercase shadow', st.cls)}>{st.label}</span>
+              ) : (
+                profile.isBot && <span className="flex items-center gap-1 rounded-full bg-grape/80 px-2 py-1 text-[10px] font-bold uppercase text-white backdrop-blur"><Bot className="h-3 w-3" /> Bot</span>
+              )}
             </div>
 
             <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4" style={{ transform: 'translateZ(30px)' }}>
