@@ -68,7 +68,7 @@ export interface Wallet {
   provider: WalletProvider
 }
 
-export type WalletProvider = 'Phantom' | 'Solflare' | 'Backpack'
+export type WalletProvider = 'Phantom' | 'Solflare' | 'Backpack' | 'Other'
 
 export interface LedgerEntry {
   id: string

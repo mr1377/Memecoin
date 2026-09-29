@@ -33,7 +33,9 @@ About 15 minutes. You need a free [Supabase](https://supabase.com) account and y
 2. Find **Web3 Wallet**, enable it, and switch on **Solana**. Click **Save**.
 3. Wallet login only works on addresses listed in **URL Configuration** from step 3, so make sure your main site address is there.
 
-The login and sign-up page then shows **Phantom / Solflare / Backpack** buttons:
+The login and sign-up page then shows every Solana wallet the visitor has installed: Phantom, Solflare, Backpack, Trust Wallet, Coinbase Wallet, OKX, Bitget, Exodus, Magic Eden and any other wallet using the Wallet Standard.
+
+- Popular wallets they don't have are offered too. On phones they open your site inside that wallet's app; on computers they open the download page.
 
 - Users sign a short message. It never sends a transaction and costs nothing.
 - The first time, a new account is created and the user fills in their profile like everyone else.

@@ -33,7 +33,7 @@ npm run build                # typecheck (app + api) + production build
 | `/` | Landing: interactive mascot, win-win simulator, roadmap, live stats, Hall of Fame, FAQ |
 | `/explore` | Search, filter chips (All / Nearby = your city/region / New / Popular), gender filter |
 | `/u/:id` | Profile: photos, city, stats, About, interests, locked/revealed socials, Send Request, Report / Block |
-| `/signup`, `/login` | Email + password (confirmation email, "forgot password") or Sign in with Solana (Phantom / Solflare / Backpack) |
+| `/signup`, `/login` | Email + password (confirmation email, "forgot password") or Sign in with Solana (any Wallet Standard wallet: Phantom, Solflare, Backpack, Trust, Coinbase, OKX, …) |
 | `/reset-password` | Choose a new password from the reset email |
 | `/onboarding` | 4-step profile wizard (basics, photos / avatar builder, vibe, private socials) — also used to edit |
 | `/dashboard` | Counters, incoming / sent / matches / L-log, daily requests, $NERDY balance, wallet, withdraw, delete account |

@@ -13,7 +13,9 @@ import { displayHandle, socialUrl } from '../lib/socials'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
 import { api, dailyInfo, selectMe, useStore } from '../lib/store'
-import type { PartnerRequest, Profile, Wallet } from '../lib/types'
+import type { WalletOption } from '../lib/wallets'
+import WalletPicker from '../components/WalletPicker'
+import type { PartnerRequest, Profile } from '../lib/types'
 
 function timeAgo(t: number) {
   const s = Math.floor((Date.now() - t) / 1000)
@@ -157,14 +159,14 @@ export default function Dashboard() {
     }
   }
 
-  const connect = async (p: Wallet['provider']) => {
-    setBusy(p)
+  const connect = async (o: WalletOption) => {
+    setBusy(o.id)
     try {
-      await api.connectWallet(p)
+      await api.connectWallet(o)
       setWalletOpen(false)
-      toast('success', `${p} connected`)
+      toast('success', `${o.name} connected`)
     } catch (e) {
-      toast('error', (e as Error).message)
+      if (!(e as { quiet?: boolean }).quiet) toast('error', (e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -425,7 +427,7 @@ export default function Dashboard() {
                       <WalletIcon className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs text-white/50">{wallet.provider}</p>
+                      <p className="text-xs text-white/50">{wallet.provider === 'Other' ? 'Solana wallet' : wallet.provider}</p>
                       <p className="truncate font-mono text-sm">
                         {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}
                       </p>
@@ -480,20 +482,8 @@ export default function Dashboard() {
       <Modal open={walletOpen} onClose={() => setWalletOpen(false)} title="Connect wallet">
         <h2 className="text-2xl font-bold">Connect a wallet</h2>
         <p className="mt-1 text-sm text-white/60">Withdraw $NERDY straight to Solana.</p>
-        <div className="mt-6 space-y-2">
-          {(
-            [
-              ['Phantom', 'from-[#ab9ff2] to-[#534bb1]'],
-              ['Solflare', 'from-[#ffc10b] to-[#fb3f2e]'],
-              ['Backpack', 'from-[#e33e3f] to-[#a42b2c]'],
-            ] as const
-          ).map(([p, g]) => (
-            <button key={p} onClick={() => connect(p)} disabled={!!busy} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-white/25 hover:bg-white/[0.06]">
-              <span className={`grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br ${g} font-bold`}>{p[0]}</span>
-              <span className="flex-1 font-semibold">{p}</span>
-              {busy === p ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4 text-white/40" />}
-            </button>
-          ))}
+        <div className="mt-6">
+          <WalletPicker onPick={connect} busyId={typeof busy === 'string' ? busy : null} disabled={!!busy} />
         </div>
         <p className="mt-4 text-center text-xs text-white/40">On mobile, this opens the site inside your wallet app. We only store your public address.</p>
       </Modal>
@@ -506,7 +496,7 @@ export default function Dashboard() {
           <input className="input pr-20 font-mono text-xl" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} placeholder="0" aria-label="Amount" />
           <button onClick={() => setAmount(String(balance))} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-carrot/15 px-3 py-1.5 text-xs font-bold text-carrot">MAX</button>
         </div>
-        {wallet && <p className="mt-3 text-xs text-white/50">To {wallet.provider} · {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}</p>}
+        {wallet && <p className="mt-3 text-xs text-white/50">To {wallet.provider === 'Other' ? 'your wallet' : wallet.provider} · {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}</p>}
         <button onClick={withdraw} disabled={busy === 'withdraw' || !amount} className="btn-primary mt-6 w-full py-4">
           {busy === 'withdraw' ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUpRight className="h-5 w-5" />} Request withdrawal
         </button>
