@@ -19,6 +19,8 @@ About 15 minutes. You need a free [Supabase](https://supabase.com) account and y
 1. **Authentication → URL Configuration**
    - **Site URL**: your Vercel address, e.g. `https://nerdy-town.vercel.app`
    - **Redirect URLs** → Add: `https://nerdy-town.vercel.app/**` (and your custom domain later, if you add one)
+   - Use your **production** address — the short one under **Domains** on the Vercel project's Overview page. The long per-deployment addresses (with random letters) are private and show Vercel's login page.
+   - Email links automatically point to that production address. With a custom domain, add an env var `VITE_SITE_URL=https://yourdomain.com` in Vercel and redeploy.
 2. **Authentication → Sign In / Providers → Email**: keep **Confirm email** turned on. Set minimum password length to 8.
 3. **Strongly recommended before launch: custom email sender.** Supabase's built-in email is only for testing and sends just a few emails per hour, so real signups will get stuck.
    - Create a free account at <https://resend.com>, add and verify your domain, and create an API key.

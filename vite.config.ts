@@ -15,10 +15,17 @@ const supabaseKey = pick(
   'SUPABASE_PUBLISHABLE_KEY',
 )
 
+// Public address used in confirmation / password-reset emails. Vercel's per-deployment URLs are
+// private (they show Vercel's login page), so prefer an explicit SITE_URL, else the project's
+// production domain that Vercel exposes at build time.
+const prodDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL
+const siteUrl = (pick('VITE_SITE_URL', 'NEXT_PUBLIC_SITE_URL', 'SITE_URL') || (prodDomain ? `https://${prodDomain}` : '')).replace(/\/+$/, '')
+
 export default defineConfig({
   plugins: [react()],
   define: {
     __SUPABASE_URL__: JSON.stringify(supabaseUrl),
     __SUPABASE_KEY__: JSON.stringify(supabaseKey),
+    __SITE_URL__: JSON.stringify(siteUrl),
   },
 })

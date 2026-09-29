@@ -352,7 +352,9 @@ export interface ProfileInput {
 /** A photo in the editor: either already uploaded (path) or a new blob to upload. */
 export type PhotoDraft = { path: string; url: string } | { blob: Blob; url: string }
 
-const siteUrl = () => window.location.origin
+declare const __SITE_URL__: string
+/** Where email links send people: the public production address, not a private preview URL. */
+const siteUrl = () => __SITE_URL__ || window.location.origin
 
 export const api = {
   async signup(email: string, password: string) {
