@@ -32,8 +32,8 @@ function parseSecret(raw: string): Keypair {
 export default async function handler(req: Req, res: Res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
   const treasuryKey = process.env.TREASURY_SECRET_KEY
   const missing = [!url && 'VITE_SUPABASE_URL', !serviceKey && 'SUPABASE_SERVICE_ROLE_KEY', !treasuryKey && 'TREASURY_SECRET_KEY'].filter(Boolean)
   if (missing.length) return res.status(503).json({ error: `Payouts not configured. Missing on Vercel: ${missing.join(', ')}` })

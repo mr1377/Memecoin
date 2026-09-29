@@ -27,17 +27,18 @@ About 15 minutes. You need a free [Supabase](https://supabase.com) account and y
 
 ## 4. Connect Vercel to Supabase
 
-1. Supabase → **Project Settings → API Keys** (or **API**). Copy:
-   - **Project URL** (Settings → Data API, looks like `https://abcd1234.supabase.co`)
-   - **Publishable key** (`sb_publishable_…`) — or the legacy **anon public** key
-2. Vercel → your project → **Settings → Environment Variables**, add for *Production, Preview and Development*:
+**Easiest: the Vercel ⇄ Supabase integration.** In Vercel → your project → **Storage** (or **Integrations**), connect your Supabase project. Vercel then adds the keys automatically (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, …) and the site picks them up. No copying needed.
 
-   | Name | Value |
-   | --- | --- |
-   | `VITE_SUPABASE_URL` | the Project URL |
-   | `VITE_SUPABASE_ANON_KEY` | the publishable / anon key |
+Check it worked: Vercel → **Settings → Environment Variables** should list variables whose names start with `SUPABASE_` or `NEXT_PUBLIC_SUPABASE_`.
 
-3. Vercel → **Deployments** → latest → **⋯ → Redeploy**.
+**Manual alternative:** add these two yourself (Settings → Environment Variables):
+
+| Name | Where to find the value |
+| --- | --- |
+| `VITE_SUPABASE_URL` | Supabase → **Project Settings → Data API** → Project URL (`https://xxxx.supabase.co`) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → **Project Settings → API Keys** → Publishable key (`sb_publishable_…`) or legacy `anon` `public` key |
+
+**After adding or changing variables, redeploy:** Vercel → **Deployments** → the top one → **⋯** menu → **Redeploy** → **Redeploy**. Variables only apply to new deployments.
 
 Open the site. You should see the homepage (not "almost ready").
 
