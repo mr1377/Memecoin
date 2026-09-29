@@ -50,7 +50,7 @@ This lets people stay in their normal phone browser: they tap a wallet, the wall
 2. **Create project** → name it `Nerdy Town` → choose **AppKit**.
 3. Copy the **Project ID**. It's public, not a secret.
 4. In the project settings, under **Domain** / allowlist, add your site address, e.g. `https://your-site.vercel.app`.
-5. Vercel → Settings → Environment Variables → add `VITE_WALLETCONNECT_PROJECT_ID` = the Project ID → **Redeploy**.
+5. The project ID `3b4b16cb9e1bab502b99c6a93df9f7c5` is already built into the site (`vite.config.ts`). To switch projects later, set `VITE_WALLETCONNECT_PROJECT_ID` in Vercel and redeploy.
 
 Android phones also get a **Wallet app** button (Solana Mobile Wallet Adapter). It opens Phantom, Solflare or Backpack directly and returns to the browser, with no setup needed.
 

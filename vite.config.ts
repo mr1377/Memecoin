@@ -21,12 +21,18 @@ const supabaseKey = pick(
 const prodDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL
 const siteUrl = (pick('VITE_SITE_URL', 'NEXT_PUBLIC_SITE_URL', 'SITE_URL') || (prodDomain ? `https://${prodDomain}` : '')).replace(/\/+$/, '')
 
+// Reown (WalletConnect) project ID — public by design (it ships to every browser). Env vars override it.
+const DEFAULT_WALLETCONNECT_PROJECT_ID = '3b4b16cb9e1bab502b99c6a93df9f7c5'
+
 export default defineConfig({
   plugins: [react()],
   define: {
     __SUPABASE_URL__: JSON.stringify(supabaseUrl),
     __SUPABASE_KEY__: JSON.stringify(supabaseKey),
     __SITE_URL__: JSON.stringify(siteUrl),
-    __WC_PROJECT_ID__: JSON.stringify(pick('VITE_WALLETCONNECT_PROJECT_ID', 'VITE_REOWN_PROJECT_ID', 'NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID', 'NEXT_PUBLIC_REOWN_PROJECT_ID', 'WALLETCONNECT_PROJECT_ID', 'REOWN_PROJECT_ID')),
+    __WC_PROJECT_ID__: JSON.stringify(
+      pick('VITE_WALLETCONNECT_PROJECT_ID', 'VITE_REOWN_PROJECT_ID', 'NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID', 'NEXT_PUBLIC_REOWN_PROJECT_ID', 'WALLETCONNECT_PROJECT_ID', 'REOWN_PROJECT_ID') ||
+        DEFAULT_WALLETCONNECT_PROJECT_ID,
+    ),
   },
 })
