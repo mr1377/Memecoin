@@ -27,5 +27,6 @@ export default defineConfig({
     __SUPABASE_URL__: JSON.stringify(supabaseUrl),
     __SUPABASE_KEY__: JSON.stringify(supabaseKey),
     __SITE_URL__: JSON.stringify(siteUrl),
+    __WC_PROJECT_ID__: JSON.stringify(pick('VITE_WALLETCONNECT_PROJECT_ID', 'VITE_REOWN_PROJECT_ID', 'NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID', 'NEXT_PUBLIC_REOWN_PROJECT_ID', 'WALLETCONNECT_PROJECT_ID', 'REOWN_PROJECT_ID')),
   },
 })

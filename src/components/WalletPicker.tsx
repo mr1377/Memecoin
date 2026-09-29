@@ -30,8 +30,8 @@ export default function WalletPicker({ onPick, busyId, disabled }: { onPick: (o:
               <Loader2 className="h-4 w-4 animate-spin" />
             </span>
           )}
-          <span className="max-w-full truncate">{o.name}</span>
-          {!o.installed && <span className="-mt-1 text-[10px] font-normal text-white/40">{mobile ? 'Open app' : 'Get'}</span>}
+          <span className="max-w-full break-words text-center leading-tight">{o.name}</span>
+          {o.hint && <span className="-mt-1 max-w-full truncate text-[10px] font-normal text-white/40">{o.hint}</span>}
         </button>
       ))}
     </div>

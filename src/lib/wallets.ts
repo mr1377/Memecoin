@@ -2,6 +2,7 @@ import { getWallets } from '@wallet-standard/app'
 import type { Wallet, WalletAccount } from '@wallet-standard/base'
 import type { SolanaSignMessageFeature } from '@solana/wallet-standard-features'
 import { useEffect, useState } from 'react'
+import { connectViaWalletConnect, walletConnectEnabled } from './walletconnect'
 
 /**
  * Solana wallet discovery via the Wallet Standard: every modern Solana wallet (Phantom, Solflare,
@@ -14,6 +15,8 @@ export interface WalletOption {
   name: string
   icon?: string
   installed: boolean
+  /** Small caption under the name. */
+  hint?: string
   /** Where to send people who don't have it (in-app browser on mobile, download page on desktop). */
   getUrl?: string
 }
@@ -27,6 +30,30 @@ export interface ConnectedWallet {
 type ConnectFeature = { 'standard:connect': { connect: () => Promise<{ accounts: readonly WalletAccount[] }> } }
 
 const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+const isAndroid = () => /Android/i.test(navigator.userAgent)
+
+const MWA_NAME = 'Mobile Wallet Adapter'
+const WC_ICON =
+  'data:image/svg+xml;base64,' +
+  btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#3396ff"/><path d="M12.2 15.6c4.3-4.2 11.3-4.2 15.6 0l.5.5a.5.5 0 0 1 0 .8l-1.8 1.7a.3.3 0 0 1-.4 0l-.7-.7a8 8 0 0 0-10.9 0l-.8.8a.3.3 0 0 1-.4 0l-1.8-1.8a.5.5 0 0 1 0-.8zm19.3 3.6 1.6 1.6a.5.5 0 0 1 0 .8l-7.1 7a.6.6 0 0 1-.8 0l-5-5a.1.1 0 0 0-.2 0l-5 5a.6.6 0 0 1-.8 0l-7.1-7a.5.5 0 0 1 0-.8l1.6-1.6a.6.6 0 0 1 .8 0l5 5a.1.1 0 0 0 .2 0l5-5a.6.6 0 0 1 .8 0l5 5a.1.1 0 0 0 .2 0l5-5a.6.6 0 0 1 .8 0z" fill="#fff"/></svg>')
+
+/**
+ * Android: register Solana's Mobile Wallet Adapter, so Phantom, Solflare, Backpack & co. open as
+ * apps and return to the browser (no in-app browser detour). It appears as a normal wallet option.
+ */
+export async function registerMobileWalletAdapter() {
+  if (!isAndroid()) return
+  await new Promise((r) => setTimeout(r, 600)) // let injected wallets (wallet in-app browsers) announce first
+  if (getWallets().get().some(isSolanaWallet)) return
+  const m = await import('@solana-mobile/wallet-standard-mobile')
+  m.registerMwa({
+    appIdentity: { name: 'Nerdy Town', uri: window.location.origin, icon: 'favicon.svg' },
+    authorizationCache: m.createDefaultAuthorizationCache(),
+    chains: ['solana:mainnet'],
+    chainSelector: m.createDefaultChainSelector(),
+    onWalletNotFound: m.createDefaultWalletNotFoundHandler(),
+  })
+}
 const here = () => encodeURIComponent(window.location.href)
 const ref = () => encodeURIComponent(window.location.origin)
 
@@ -47,11 +74,25 @@ const sameWallet = (a: string, b: string) => a.toLowerCase().replace(/\s*wallet$
 
 function listOptions(): WalletOption[] {
   const installed = getWallets().get().filter(isSolanaWallet)
-  const opts: WalletOption[] = installed.map((w) => ({ id: `std:${w.name}`, name: w.name, icon: w.icon, installed: true }))
+  const opts: WalletOption[] = installed.map((w) =>
+    w.name === MWA_NAME
+      ? { id: `std:${w.name}`, name: 'Wallet app', hint: 'Phantom, Solflare…', icon: w.icon, installed: true }
+      : { id: `std:${w.name}`, name: w.name, icon: w.icon, installed: true },
+  )
+  const mobile = isMobile()
+  if (walletConnectEnabled) opts.push({ id: 'walletconnect', name: 'WalletConnect', hint: mobile ? 'Trust, OKX, 300+' : 'Scan with phone', icon: WC_ICON, installed: true })
   for (const s of SUGGESTED) {
     if (opts.some((o) => sameWallet(o.name, s.name))) continue
-    const url = isMobile() ? s.mobile?.() ?? s.desktop : s.desktop
-    opts.push({ id: `get:${s.name}`, name: s.name, installed: false, getUrl: url })
+    if (mobile) {
+      // App-to-app flows (Mobile Wallet Adapter / WalletConnect) cover these; only fall back to
+      // opening the site inside a wallet browser where nothing else works (Phantom on iPhone).
+      if (walletConnectEnabled && s.name !== 'Phantom') continue
+      if (isAndroid() && installed.some((w) => w.name === MWA_NAME)) continue
+      if (!s.mobile) continue
+      opts.push({ id: `get:${s.name}`, name: s.name, hint: 'Open in app', installed: false, getUrl: s.mobile() })
+    } else {
+      opts.push({ id: `get:${s.name}`, name: s.name, hint: 'Get', installed: false, getUrl: s.desktop })
+    }
   }
   return opts
 }
@@ -75,6 +116,7 @@ export function useWalletOptions() {
 
 /** Connect to an installed wallet (or send the user to get it) and return a uniform signer. */
 export async function connectWallet(option: WalletOption): Promise<ConnectedWallet> {
+  if (option.id === 'walletconnect') return connectViaWalletConnect()
   if (!option.installed) {
     if (option.getUrl) {
       if (isMobile()) window.location.href = option.getUrl

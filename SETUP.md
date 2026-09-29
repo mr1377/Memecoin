@@ -42,6 +42,18 @@ The login and sign-up page then shows every Solana wallet the visitor has instal
 - Their wallet is automatically linked for Phase 2 payouts.
 - On phones without the wallet's browser extension, the button opens your site inside the wallet app.
 
+### 3c. Turn on WalletConnect (phone wallets without the in-app browser detour)
+
+This lets people stay in their normal phone browser: they tap a wallet, the wallet app opens, they approve, and they come straight back. It covers Trust Wallet, OKX, Bitget, Exodus, Solflare and 300+ others. On computers it shows a QR code to scan with a phone wallet.
+
+1. Create a free account at <https://dashboard.reown.com> (Reown is the company behind WalletConnect).
+2. **Create project** → name it `Nerdy Town` → choose **AppKit**.
+3. Copy the **Project ID**. It's public, not a secret.
+4. In the project settings, under **Domain** / allowlist, add your site address, e.g. `https://your-site.vercel.app`.
+5. Vercel → Settings → Environment Variables → add `VITE_WALLETCONNECT_PROJECT_ID` = the Project ID → **Redeploy**.
+
+Android phones also get a **Wallet app** button (Solana Mobile Wallet Adapter). It opens Phantom, Solflare or Backpack directly and returns to the browser, with no setup needed.
+
 ## 4. Connect Vercel to Supabase
 
 **Easiest: the Vercel ⇄ Supabase integration.** In Vercel → your project → **Storage** (or **Integrations**), connect your Supabase project. Vercel then adds the keys automatically (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, …) and the site picks them up. No copying needed.
