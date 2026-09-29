@@ -3,7 +3,7 @@ import { Coins, Flame } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../lib/store'
-import { Bot } from 'lucide-react'
+import { Gamepad2 } from 'lucide-react'
 import type { Profile } from '../lib/types'
 import AnimatedNumber from './AnimatedNumber'
 import { confetti } from './Confetti'
@@ -63,8 +63,8 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
             <p className="mt-2 text-white/60">Their socials are yours. Slide in. Be cool. (You won’t be. That’s fine.)</p>
             {other.isBot ? (
               <div className="mt-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-sm text-white/70">
-                <Bot className="h-6 w-6 shrink-0 text-grape-300" />
-                {other.name.split(' ')[0]} is a Nerdy Town bot, so there are no socials to reveal. Real residents share theirs when they accept.
+                <Gamepad2 className="h-6 w-6 shrink-0 text-grape-300" />
+                {other.name.split(' ')[0]} is a Nerdy Town NPC — a built-in resident — so there are no socials to reveal. Real residents share theirs when they accept.
               </div>
             ) : socials ? (
               <SocialsReveal socials={socials} className="mt-6 text-left" />
@@ -89,7 +89,7 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
               <div className={`rounded-2xl border p-4 ${paid ? 'border-carrot/30 bg-carrot/10' : 'border-white/10 bg-white/5'}`}>
                 <Coins className={`mx-auto h-5 w-5 ${paid ? 'text-carrot' : 'text-white/30'}`} />
                 <p className="mt-1 font-display text-3xl font-extrabold">{paid ? `+${reward}` : '🔒'}</p>
-                <p className="text-xs text-white/50">{paid ? '$NERDY earned' : phase === 2 ? 'Bots don’t pay $NERDY' : 'Tokens unlock in Phase 2'}</p>
+                <p className="text-xs text-white/50">{paid ? '$NERDY earned' : phase === 2 ? 'NPCs don’t pay $NERDY' : 'Tokens unlock in Phase 2'}</p>
               </div>
             </div>
             <div className="mt-5 flex items-center gap-3 rounded-2xl bg-white/5 p-3 text-left text-sm text-white/60">

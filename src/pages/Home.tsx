@@ -40,7 +40,7 @@ function Hero() {
   const { rejectReward: REJECT_REWARD } = useStore((s) => s.settings)
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
-  // Real residents first; bots fill the avatar stack until the town grows.
+  // Real residents first; NPCs fill the avatar stack until the town grows.
   const faces = useMemo(() => Object.values(profiles).sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0)).slice(0, 5), [profiles])
   const mxRaw = useMotionValue(0)
   const myRaw = useMotionValue(0)
@@ -495,8 +495,8 @@ function Roadmap() {
 
 function HallOfFame() {
   const profiles = useStore((s) => s.profiles)
-  // Only real residents make the Hall of Fame.
-  const top = useMemo(() => Object.values(profiles).filter((p) => !p.isBot && p.rejectionsReceived > 0).sort((a, b) => b.rejectionsReceived - a.rejectionsReceived).slice(0, 5), [profiles])
+  // NPCs compete too, tagged as such. Counters are real (earned from actual requests).
+  const top = useMemo(() => Object.values(profiles).filter((p) => p.rejectionsReceived > 0).sort((a, b) => b.rejectionsReceived - a.rejectionsReceived).slice(0, 5), [profiles])
   const max = top[0]?.rejectionsReceived || 1
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
@@ -523,7 +523,10 @@ function HallOfFame() {
                 <span className={clsx('w-6 text-center font-display text-2xl font-black', i === 0 ? 'text-carrot' : 'text-white/30')}>{i + 1}</span>
                 <ProfilePhoto profile={p} className="h-12 w-12 shrink-0 rounded-2xl" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold group-hover:text-carrot">{p.name} {i === 0 && '👑'}</p>
+                  <p className="flex items-center gap-2 font-semibold group-hover:text-carrot">
+                    <span className="truncate">{p.name} {i === 0 && '👑'}</span>
+                    {p.isBot && <span className="shrink-0 rounded-full bg-grape/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-grape-300">NPC</span>}
+                  </p>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
                     <motion.div initial={{ width: 0 }} whileInView={{ width: `${(p.rejectionsReceived / max) * 100}%` }} viewport={{ once: true }} transition={{ duration: 1.1, delay: i * 0.08 }} className="h-full rounded-full bg-gradient-to-r from-rizz to-carrot" />
                   </div>

@@ -1,6 +1,6 @@
 -- =====================================================================
--- Nerdy Town — sample bot residents (optional)
--- Run AFTER schema.sql. Bots are labelled in the UI, answer requests after a
+-- Nerdy Town — NPC residents (optional)
+-- Run AFTER schema.sql. NPCs are tagged "NPC" on their profile, answer requests after a
 -- few seconds, have no socials and never pay out $NERDY.
 -- To remove them later:  delete from public.profiles where is_bot;
 -- =====================================================================

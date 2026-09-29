@@ -47,10 +47,10 @@ Everything that matters is enforced in the database (`supabase/schema.sql`), not
 - **One request per pair of people, ever.**
 - **Socials** (`contacts` table) are readable only by their owner and by people whose request that owner accepted.
 - **Counters** (popularity, matches, hearts broken), **balances** and **verified badges** can't be written by users.
-- **Phase 2:** a rejection by a real user pays `reject_reward` $NERDY. Bots never pay.
+- **Phase 2:** a rejection by a real user pays `reject_reward` $NERDY. NPCs never pay.
 - **Withdrawals** reserve the balance immediately and wait for admin approval, which prevents double-spending.
 - **Blocking** hides both people from each other and prevents requests between them.
 
-Bots (`supabase/bots.sql`) are labelled sample residents that answer requests after a few seconds. They have no socials and are excluded from stats and the Hall of Fame.
+NPCs (`supabase/bots.sql`, `is_bot = true`) are built-in residents that answer requests after a few seconds. They look like normal profiles in Explore; an "NPC" tag appears on their profile page, in the accept popup and on the Hall of Fame. They have no socials, never pay $NERDY, and are excluded from homepage stats.
 
 Avatars are procedurally generated SVG caricatures (`NerdAvatar.tsx`); users can also upload up to 4 photos.

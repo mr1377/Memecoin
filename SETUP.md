@@ -12,7 +12,7 @@ About 15 minutes. You need a free [Supabase](https://supabase.com) account and y
 
 1. In the project, open **SQL Editor** → **New query**.
 2. Open [`supabase/schema.sql`](supabase/schema.sql) from this repo, copy **all** of it, paste, and click **Run**. You should see "Success. No rows returned".
-3. New query again → paste all of [`supabase/bots.sql`](supabase/bots.sql) → **Run**. (This adds the 24 labelled sample bots. Skip it if you don't want them.)
+3. New query again → paste all of [`supabase/bots.sql`](supabase/bots.sql) → **Run**. (This adds the 24 NPC residents. Skip it if you don’t want them.)
 
 ## 3. Configure login emails
 
@@ -82,7 +82,7 @@ Open the site. You should see the homepage (not "almost ready").
 ## Useful SQL
 
 ```sql
--- Remove all sample bots (their requests disappear too)
+-- Remove all NPCs (their requests disappear too)
 delete from public.profiles where is_bot;
 
 -- See today's signups

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeft, BadgeCheck, Ban, Bot, Calendar, Check, Flag, Flame, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, Sparkles, Swords, X } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Ban, Calendar, Check, Flag, Flame, Gamepad2, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, Sparkles, Swords, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
@@ -261,8 +261,8 @@ export default function ProfilePage() {
                 <Sparkles className="h-3.5 w-3.5" /> {profile.nerdClass}
               </span>
               {profile.isBot && (
-                <span className="chip border-grape/40 bg-grape/10 text-grape-300" title="Sample resident run by Nerdy Town">
-                  <Bot className="h-3.5 w-3.5" /> Bot
+                <span className="chip border-grape/40 bg-grape/10 text-grape-300" title="Built-in resident run by Nerdy Town">
+                  <Gamepad2 className="h-3.5 w-3.5" /> NPC
                 </span>
               )}
               {profile.verified && (
@@ -321,7 +321,7 @@ export default function ProfilePage() {
               <SocialsReveal socials={s.myContacts} label="Your socials (private)" />
             ) : profile.isBot ? (
               <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
-                <Bot className="h-5 w-5 shrink-0 text-grape-300" /> Bot account — no socials. It answers requests so you can try Nerdy Town.
+                <Gamepad2 className="h-5 w-5 shrink-0 text-grape-300" /> NPC — a built-in Nerdy Town resident. No socials to reveal, but it answers requests so the town never sleeps.
               </div>
             ) : socials ? (
               <SocialsReveal socials={socials} />

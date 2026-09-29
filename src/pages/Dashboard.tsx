@@ -294,7 +294,7 @@ export default function Dashboard() {
                         {tab === 'matches' ? (
                           outgoing ? (
                             o.isBot ? (
-                              <p className="text-xs text-white/50">Bot account — no socials</p>
+                              <p className="text-xs text-white/50">NPC — no socials to reveal</p>
                             ) : (
                               <p className="truncate text-sm text-lime">
                                 <Scramble text={socialsOf(o.id)[0] ? displayHandle(socialsOf(o.id)[0]) : '…'} className="font-mono" />
