@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark only; }
+  html { background-color: #0b0918; }
   html { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
   body {
     @apply bg-ink-900 text-white font-sans antialiased;
