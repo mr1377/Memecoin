@@ -7,6 +7,13 @@ import { Page } from '../components/Layout'
 import Mascot from '../components/Mascot'
 import { useToast } from '../components/Toast'
 import { api, selectMe, useStore } from '../lib/store'
+import type { WalletProvider } from '../lib/types'
+
+const WALLETS: [WalletProvider, string][] = [
+  ['Phantom', 'from-[#ab9ff2] to-[#534bb1]'],
+  ['Solflare', 'from-[#ffc10b] to-[#fb3f2e]'],
+  ['Backpack', 'from-[#e33e3f] to-[#a42b2c]'],
+]
 
 function strength(p: string) {
   let s = 0
@@ -36,6 +43,7 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
   const [unconfirmed, setUnconfirmed] = useState(false)
   const [view, setView] = useState<View>('form')
   const [shake, setShake] = useState(0)
+  const [walletBusy, setWalletBusy] = useState<WalletProvider | null>(null)
 
   if (session && !busy && view === 'form') return <Navigate to={me ? next || '/dashboard' : '/onboarding'} replace />
 
@@ -94,6 +102,23 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
       fail(err)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const walletLogin = async (provider: WalletProvider) => {
+    setError('')
+    setUnconfirmed(false)
+    setBusy(true)
+    setWalletBusy(provider)
+    try {
+      const { hasProfile } = await api.walletSignIn(provider)
+      toast('success', hasProfile ? 'Welcome back, legend.' : 'Wallet connected!', hasProfile ? undefined : 'Now let’s build your profile.')
+      nav(hasProfile ? next || '/dashboard' : '/onboarding' + (next ? `?next=${encodeURIComponent(next)}` : ''), { replace: true })
+    } catch (err) {
+      fail(err)
+    } finally {
+      setBusy(false)
+      setWalletBusy(null)
     }
   }
 
@@ -224,6 +249,26 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
             {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{mode === 'signup' ? 'Create account' : 'Log in'} <ArrowRight className="h-5 w-5" /></>}
           </button>
         </form>
+        <div className="my-6 flex items-center gap-3 text-xs text-white/30">
+          <span className="h-px flex-1 bg-white/10" /> or continue with a Solana wallet <span className="h-px flex-1 bg-white/10" />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {WALLETS.map(([w, g]) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => walletLogin(w)}
+              disabled={busy}
+              className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-2 py-3 text-xs font-semibold transition hover:border-white/25 hover:bg-white/[0.06] disabled:opacity-50"
+            >
+              <span className={`grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br ${g} text-sm font-bold`}>
+                {walletBusy === w ? <Loader2 className="h-4 w-4 animate-spin" /> : w[0]}
+              </span>
+              {w}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-center text-[11px] text-white/35">You’ll sign a message to prove it’s your wallet — no transaction, no fees.</p>
         <p className="mt-6 text-center text-xs text-white/40">By joining you confirm you’re 18+ and agree to be kind. Your socials are only shared when you accept a request.</p>
       </>
     )

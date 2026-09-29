@@ -27,6 +27,19 @@ About 15 minutes. You need a free [Supabase](https://supabase.com) account and y
    - Supabase → **Authentication → Emails → SMTP Settings** → enable custom SMTP:
      host `smtp.resend.com`, port `465`, username `resend`, password = your Resend API key, sender e.g. `hello@yourdomain.com`.
 
+### 3b. Turn on wallet login (Sign in with Solana)
+
+1. Supabase → **Authentication → Sign In / Providers**.
+2. Find **Web3 Wallet**, enable it, and switch on **Solana**. Click **Save**.
+3. Wallet login only works on addresses listed in **URL Configuration** from step 3, so make sure your main site address is there.
+
+The login and sign-up page then shows **Phantom / Solflare / Backpack** buttons:
+
+- Users sign a short message. It never sends a transaction and costs nothing.
+- The first time, a new account is created and the user fills in their profile like everyone else.
+- Their wallet is automatically linked for Phase 2 payouts.
+- On phones without the wallet's browser extension, the button opens your site inside the wallet app.
+
 ## 4. Connect Vercel to Supabase
 
 **Easiest: the Vercel ⇄ Supabase integration.** In Vercel → your project → **Storage** (or **Integrations**), connect your Supabase project. Vercel then adds the keys automatically (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, …) and the site picks them up. No copying needed.

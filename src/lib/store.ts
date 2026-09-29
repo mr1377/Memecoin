@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, SolanaWallet } from '@supabase/supabase-js'
 import { isConfigured, PHOTO_BUCKET, photoUrl, supabase } from './supabase'
 import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, Settings, Social, Wallet, WalletProvider } from './types'
 
@@ -356,6 +356,18 @@ declare const __SITE_URL__: string
 /** Where email links send people: the public production address, not a private preview URL. */
 const siteUrl = () => __SITE_URL__ || window.location.origin
 
+/** Wallet used to sign in, waiting to be linked for payouts once a profile exists. */
+let pendingWallet: { address: string; provider: WalletProvider } | null = null
+async function linkPendingWallet() {
+  const me = state.session
+  if (!pendingWallet || !me || !state.profiles[me] || state.wallet) return
+  const { address, provider } = pendingWallet
+  pendingWallet = null
+  // Best effort: skipped silently if this wallet is already linked to another account.
+  const { error } = await supabase.rpc('link_wallet', { p_address: address, p_provider: provider })
+  if (!error) await loadMine()
+}
+
 export const api = {
   async signup(email: string, password: string) {
     email = email.trim().toLowerCase()
@@ -376,6 +388,42 @@ export const api = {
     }
     await applySession(data.session)
     return { hasProfile: !!state.profiles[data.user.id] }
+  },
+
+  /**
+   * Sign in (or sign up) with a Solana wallet via Supabase's native Sign-In-With-Solana.
+   * The wallet signs a plain-text message — no transaction, no fees. The account is a normal
+   * Supabase user, so every database rule applies unchanged.
+   */
+  async walletSignIn(provider: WalletProvider) {
+    const { address, wallet } = await connectSolanaWallet(provider)
+    if (!wallet.signMessage) throw new Error(`${provider} can’t sign messages here. Try another wallet.`)
+    // Normalise wallets: Supabase expects signMessage() to return raw bytes, while Phantom,
+    // Solflare and Backpack return { signature }. Also pins the public key we just connected.
+    const adapter: SolanaWallet = {
+      publicKey: { toBase58: () => address },
+      signMessage: async (message: Uint8Array) => {
+        const out = await wallet.signMessage!(message, 'utf8')
+        return out instanceof Uint8Array ? out : new Uint8Array(out.signature)
+      },
+    } as unknown as SolanaWallet
+    const { data, error } = await supabase.auth.signInWithWeb3({
+      chain: 'solana',
+      wallet: adapter,
+      statement: 'Sign in to Nerdy Town. I confirm I am 18 or older. This does not send a transaction or cost any fees.',
+    })
+    if (error) {
+      if (/provider.*(disabled|not enabled)|web3.*disabled|unsupported/i.test(error.message)) throw new Error('Wallet login isn’t switched on yet. (Admin: enable Web3 Wallet → Solana in Supabase.)')
+      if (/reject|cancel|denied/i.test(error.message)) throw new Error('Signature request was cancelled.')
+      if (/uri|url|domain/i.test(error.message)) throw new Error('This address isn’t allowed for wallet login. Use the main site address.')
+      throw new Error(error.message)
+    }
+    await applySession(data.session)
+    // Use the sign-in wallet for Phase 2 payouts too. New users have no profile yet, so it's
+    // remembered and linked right after onboarding creates the profile.
+    pendingWallet = { address, provider }
+    await linkPendingWallet()
+    return { hasProfile: !!(data.session && state.profiles[data.session.user.id]) }
   },
 
   async resendConfirmation(email: string) {
@@ -440,6 +488,7 @@ export const api = {
     if (removed.length) await supabase.storage.from(PHOTO_BUCKET).remove(removed)
 
     await loadMine()
+    await linkPendingWallet()
     await loadPublic()
   },
 
@@ -467,7 +516,7 @@ export const api = {
   },
 
   async connectWallet(provider: WalletProvider) {
-    const address = await connectSolanaWallet(provider)
+    const { address } = await connectSolanaWallet(provider)
     unwrap(await supabase.rpc('link_wallet', { p_address: address, p_provider: provider }))
     await loadMine()
   },
@@ -583,9 +632,11 @@ export const api = {
 interface InjectedWallet {
   connect: () => Promise<{ publicKey?: { toString(): string } } | void>
   publicKey?: { toString(): string } | null
+  signMessage?: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array } | Uint8Array>
 }
 
-async function connectSolanaWallet(provider: WalletProvider): Promise<string> {
+/** Connects the chosen wallet; on mobile without it, opens the site inside the wallet app. */
+async function connectSolanaWallet(provider: WalletProvider): Promise<{ address: string; wallet: InjectedWallet }> {
   const w = window as unknown as {
     phantom?: { solana?: InjectedWallet & { isPhantom?: boolean } }
     solana?: InjectedWallet & { isPhantom?: boolean }
@@ -609,7 +660,7 @@ async function connectSolanaWallet(provider: WalletProvider): Promise<string> {
     const res = await injected.connect()
     const key = (res && 'publicKey' in res && res.publicKey) || injected.publicKey
     if (!key) throw new Error()
-    return key.toString()
+    return { address: key.toString(), wallet: injected }
   } catch {
     throw new Error('Wallet connection was cancelled.')
   }
