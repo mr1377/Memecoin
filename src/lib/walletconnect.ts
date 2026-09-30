@@ -40,10 +40,6 @@ function getKit(): Promise<AppKit> {
   return kit
 }
 
-interface SolanaProvider {
-  signMessage: (message: Uint8Array) => Promise<Uint8Array>
-}
-
 /** Opens the WalletConnect modal and resolves once a Solana wallet is connected. */
 export async function connectViaWalletConnect(): Promise<ConnectedWallet> {
   if (!walletConnectEnabled) throw new Error('WalletConnect isn’t set up yet.')
@@ -78,12 +74,41 @@ export async function connectViaWalletConnect(): Promise<ConnectedWallet> {
   })
   await modal.close().catch(() => {})
 
-  const provider = modal.getProvider<SolanaProvider>('solana')
-  if (!provider) throw new Error('Wallet connected, but no Solana account was shared.')
-  const walletName = (modal.getWalletInfo?.()?.name as string | undefined) ?? 'WalletConnect'
+  const walletName = modal.getWalletInfo?.()?.name ?? 'WalletConnect'
   return {
     name: walletName,
     address,
-    signMessage: (message) => provider.signMessage(message),
+    signMessage: (message) => signOverWalletConnect(modal, address, message),
   }
+}
+
+type WcProvider = {
+  signMessage?: (m: Uint8Array) => Promise<unknown>
+  request?: (args: { method: string; params: unknown }, chain?: string) => Promise<unknown>
+  session?: { namespaces?: Record<string, { accounts?: string[] }> }
+}
+
+/** WalletConnect's Solana message-signing RPC. The wallet app opens to approve (deep link on phones). */
+export async function signOverWalletConnect(modal: AppKit, address: string, message: Uint8Array): Promise<Uint8Array> {
+  const bs58 = (await import('bs58')).default
+  const p = modal.getProvider<WcProvider>('solana')
+  if (!p) throw new Error('WalletConnect session ended. Pick your wallet again.')
+  let out: unknown
+  if (typeof p.signMessage === 'function') {
+    out = await p.signMessage(message)
+  } else if (typeof p.request === 'function') {
+    // Use the exact Solana chain id the wallet approved (some wallets still use the legacy mainnet id).
+    const account = p.session?.namespaces?.solana?.accounts?.find((a) => a.endsWith(address)) ?? p.session?.namespaces?.solana?.accounts?.[0]
+    const chain = account ? account.split(':').slice(0, 2).join(':') : 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
+    out = await p.request({ method: 'solana_signMessage', params: { message: bs58.encode(message), pubkey: address } }, chain)
+  } else {
+    throw new Error('This wallet can’t sign messages over WalletConnect.')
+  }
+  // Wallets answer with raw bytes, { signature: base58 } or { signature: bytes }.
+  if (out instanceof Uint8Array) return out
+  const sig = (out as { signature?: unknown })?.signature
+  if (typeof sig === 'string') return bs58.decode(sig)
+  if (sig instanceof Uint8Array) return sig
+  if (Array.isArray(sig)) return Uint8Array.from(sig as number[])
+  throw new Error('The wallet returned an unexpected signature.')
 }
