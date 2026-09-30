@@ -145,6 +145,31 @@ export async function connectWallet(option: WalletOption): Promise<ConnectedWall
   }
 }
 
+type SignInOutput = { account: WalletAccount; signedMessage: Uint8Array; signature: Uint8Array }
+type SignInFeature = { 'solana:signIn': { signIn: (...inputs: Record<string, unknown>[]) => Promise<readonly SignInOutput[]> } }
+
+/**
+ * One-trip "Sign in with Solana": the wallet connects AND signs in a single approval. Crucial on
+ * phones — Android only lets a site open a wallet app right after a tap, so a second trip (connect,
+ * come back, then sign) gets blocked. Returns null when the wallet doesn't support it.
+ */
+export function oneStepSignIn(option: WalletOption) {
+  if (!option.id.startsWith('std:')) return null
+  const wallet = getWallets().get().find((w) => `std:${w.name}` === option.id)
+  if (!wallet || !('solana:signIn' in wallet.features)) return null
+  const feature = (wallet.features as unknown as SignInFeature)['solana:signIn']
+  return async (input: Record<string, unknown>) => {
+    const [out] = await feature.signIn(input)
+    if (!out) throw new Error('The wallet didn’t return a signature.')
+    return { name: wallet.name, address: out.account.address, signedMessage: out.signedMessage, signature: out.signature }
+  }
+}
+
+/** Signing in a separate trip must start from a fresh tap on phones and with WalletConnect. */
+export const needsSecondTap = (option: WalletOption) => option.id === 'walletconnect' || isMobile()
+
+export const shortAddress = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`
+
 /** Our database stores one of these labels; any other wallet is stored as "Other". */
 export function providerLabel(name: string): 'Phantom' | 'Solflare' | 'Backpack' | 'Other' {
   for (const p of ['Phantom', 'Solflare', 'Backpack'] as const) if (sameWallet(name, p)) return p

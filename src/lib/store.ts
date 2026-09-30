@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { Session, SolanaWallet } from '@supabase/supabase-js'
 import { isConfigured, PHOTO_BUCKET, photoUrl, supabase } from './supabase'
 import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, Settings, Social, Wallet } from './types'
-import { connectWallet, providerLabel, type WalletOption } from './wallets'
+import { connectWallet, needsSecondTap, oneStepSignIn, providerLabel, type ConnectedWallet, type WalletOption } from './wallets'
 
 /**
  * Client-side cache of the Supabase backend. All rules (limits, privacy, balances)
@@ -357,6 +357,31 @@ declare const __SITE_URL__: string
 /** Where email links send people: the public production address, not a private preview URL. */
 const siteUrl = () => __SITE_URL__ || window.location.origin
 
+const WALLET_STATEMENT = 'Sign in to Nerdy Town. I confirm I am 18 or older. This does not send a transaction or cost any fees.'
+
+async function finishWalletSignIn(adapter: SolanaWallet, who: () => { name: string; address: string } | null) {
+  let res: Awaited<ReturnType<typeof supabase.auth.signInWithWeb3>>
+  try {
+    res = await supabase.auth.signInWithWeb3({ chain: 'solana', wallet: adapter, statement: WALLET_STATEMENT })
+  } catch (e) {
+    throw new Error(/reject|cancel|denied|declin/i.test((e as Error).message) ? 'Signature request was cancelled.' : (e as Error).message)
+  }
+  const { data, error } = res
+  if (error) {
+    if (/provider.*(disabled|not enabled)|web3.*disabled|unsupported/i.test(error.message)) throw new Error('Wallet login isn’t switched on yet. (Admin: enable Web3 Wallet → Solana in Supabase.)')
+    if (/reject|cancel|denied/i.test(error.message)) throw new Error('Signature request was cancelled.')
+    if (/uri|url|domain/i.test(error.message)) throw new Error('This site address isn’t allowed for wallet login yet. (Admin: add it in Supabase → Authentication → URL Configuration.)')
+    throw new Error(error.message)
+  }
+  await applySession(data.session)
+  // Use the sign-in wallet for Phase 2 payouts too. New users have no profile yet, so it's
+  // remembered and linked right after onboarding creates the profile.
+  const w = who()
+  if (w) pendingWallet = { address: w.address, provider: providerLabel(w.name) }
+  await linkPendingWallet()
+  return { hasProfile: !!(data.session && state.profiles[data.session.user.id]) }
+}
+
 /** Wallet used to sign in, waiting to be linked for payouts once a profile exists. */
 let pendingWallet: { address: string; provider: string } | null = null
 async function linkPendingWallet() {
@@ -396,36 +421,33 @@ export const api = {
    * The wallet signs a plain-text message — no transaction, no fees. The account is a normal
    * Supabase user, so every database rule applies unchanged.
    */
-  async walletSignIn(option: WalletOption) {
+  async walletSignIn(option: WalletOption): Promise<{ hasProfile: boolean } | { pending: ConnectedWallet }> {
+    // Best path: connect + sign in one wallet approval.
+    const oneStep = oneStepSignIn(option)
+    if (oneStep) {
+      let who: { name: string; address: string } | null = null
+      const adapter = {
+        signIn: async (input: Record<string, unknown>) => {
+          const out = await oneStep(input)
+          who = { name: out.name, address: out.address }
+          return { signedMessage: out.signedMessage, signature: out.signature }
+        },
+      } as unknown as SolanaWallet
+      return finishWalletSignIn(adapter, () => who)
+    }
     const wallet = await connectWallet(option)
-    // Adapter: Supabase builds the Sign-In-With-Solana message; the wallet only signs it.
+    // Phones / WalletConnect: the signature trip must start from a new tap ("Sign in" button).
+    if (needsSecondTap(option)) return { pending: wallet }
+    return api.walletSignInWith(wallet)
+  },
+
+  /** Second step for wallets connected separately: ask the wallet to sign the login message. */
+  async walletSignInWith(wallet: ConnectedWallet) {
     const adapter = {
       publicKey: { toBase58: () => wallet.address },
       signMessage: (message: Uint8Array) => wallet.signMessage(message),
     } as unknown as SolanaWallet
-    let res: Awaited<ReturnType<typeof supabase.auth.signInWithWeb3>>
-    try {
-      res = await supabase.auth.signInWithWeb3({
-        chain: 'solana',
-        wallet: adapter,
-        statement: 'Sign in to Nerdy Town. I confirm I am 18 or older. This does not send a transaction or cost any fees.',
-      })
-    } catch (e) {
-      throw new Error(/reject|cancel|denied|declin/i.test((e as Error).message) ? 'Signature request was cancelled.' : (e as Error).message)
-    }
-    const { data, error } = res
-    if (error) {
-      if (/provider.*(disabled|not enabled)|web3.*disabled|unsupported/i.test(error.message)) throw new Error('Wallet login isn’t switched on yet. (Admin: enable Web3 Wallet → Solana in Supabase.)')
-      if (/reject|cancel|denied/i.test(error.message)) throw new Error('Signature request was cancelled.')
-      if (/uri|url|domain/i.test(error.message)) throw new Error('This address isn’t allowed for wallet login. Use the main site address.')
-      throw new Error(error.message)
-    }
-    await applySession(data.session)
-    // Use the sign-in wallet for Phase 2 payouts too. New users have no profile yet, so it's
-    // remembered and linked right after onboarding creates the profile.
-    pendingWallet = { address: wallet.address, provider: providerLabel(wallet.name) }
-    await linkPendingWallet()
-    return { hasProfile: !!(data.session && state.profiles[data.session.user.id]) }
+    return finishWalletSignIn(adapter, () => wallet)
   },
 
   async resendConfirmation(email: string) {

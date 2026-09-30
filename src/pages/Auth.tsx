@@ -1,13 +1,13 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, MailCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Loader2, Lock, Mail, MailCheck, PenLine } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
 import Mascot from '../components/Mascot'
 import { useToast } from '../components/Toast'
 import { api, selectMe, useStore } from '../lib/store'
-import type { WalletOption } from '../lib/wallets'
+import { shortAddress, type ConnectedWallet, type WalletOption } from '../lib/wallets'
 import WalletPicker from '../components/WalletPicker'
 
 function strength(p: string) {
@@ -39,6 +39,7 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
   const [view, setView] = useState<View>('form')
   const [shake, setShake] = useState(0)
   const [walletBusy, setWalletBusy] = useState<string | null>(null)
+  const [connected, setConnected] = useState<ConnectedWallet | null>(null)
 
   if (session && !busy && view === 'form') return <Navigate to={me ? next || '/dashboard' : '/onboarding'} replace />
 
@@ -101,20 +102,40 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
     }
   }
 
+  const loggedIn = (hasProfile: boolean) => {
+    toast('success', hasProfile ? 'Welcome back, legend.' : 'Wallet connected!', hasProfile ? undefined : 'Now let’s build your profile.')
+    nav(hasProfile ? next || '/dashboard' : '/onboarding' + (next ? `?next=${encodeURIComponent(next)}` : ''), { replace: true })
+  }
+
   const walletLogin = async (option: WalletOption) => {
     setError('')
     setUnconfirmed(false)
     setBusy(true)
     setWalletBusy(option.id)
     try {
-      const { hasProfile } = await api.walletSignIn(option)
-      toast('success', hasProfile ? 'Welcome back, legend.' : 'Wallet connected!', hasProfile ? undefined : 'Now let’s build your profile.')
-      nav(hasProfile ? next || '/dashboard' : '/onboarding' + (next ? `?next=${encodeURIComponent(next)}` : ''), { replace: true })
+      const res = await api.walletSignIn(option)
+      if ('pending' in res) setConnected(res.pending)
+      else loggedIn(res.hasProfile)
     } catch (err) {
       fail(err)
     } finally {
       setBusy(false)
       setWalletBusy(null)
+    }
+  }
+
+  // Second tap: sign the login message with the wallet connected above.
+  const signWithConnected = async () => {
+    if (!connected) return
+    setError('')
+    setBusy(true)
+    try {
+      const { hasProfile } = await api.walletSignInWith(connected)
+      loggedIn(hasProfile)
+    } catch (err) {
+      fail(err)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -248,7 +269,23 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
         <div className="my-6 flex items-center gap-3 text-xs text-white/30">
           <span className="h-px flex-1 bg-white/10" /> or continue with a Solana wallet <span className="h-px flex-1 bg-white/10" />
         </div>
-        <WalletPicker onPick={walletLogin} busyId={walletBusy} disabled={busy} />
+        {connected ? (
+          <div className="rounded-2xl border border-lime/30 bg-lime/10 p-4 text-center">
+            <p className="text-sm text-white/80">
+              <Check className="mr-1 inline h-4 w-4 text-lime" />
+              {connected.name} connected · <span className="font-mono">{shortAddress(connected.address)}</span>
+            </p>
+            <button type="button" onClick={signWithConnected} disabled={busy} className="btn-primary mt-3 w-full py-3.5">
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <PenLine className="h-5 w-5" />} Sign in with this wallet
+            </button>
+            <p className="mt-2 text-[11px] text-white/50">Your wallet opens once more to sign — free, no transaction.</p>
+            <button type="button" onClick={() => setConnected(null)} className="mt-2 text-xs text-white/50 underline hover:text-white">
+              Use a different wallet
+            </button>
+          </div>
+        ) : (
+          <WalletPicker onPick={walletLogin} busyId={walletBusy} disabled={busy} />
+        )}
         <p className="mt-3 text-center text-[11px] text-white/35">You’ll sign a message to prove it’s your wallet — no transaction, no fees.</p>
         <p className="mt-6 text-center text-xs text-white/40">By joining you confirm you’re 18+ and agree to be kind. Your socials are only shared when you accept a request.</p>
       </>
