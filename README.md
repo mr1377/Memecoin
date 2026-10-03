@@ -5,7 +5,7 @@
 Utility platform for the **$NERDY** meme coin. Send a partner request to anyone:
 
 - **Accepted** → you instantly get their socials (Instagram, X, Telegram, Snapchat, Discord, TikTok, WhatsApp or email).
-- **Rejected** → it's logged on your dashboard as public popularity (Phase 1), and converts into $NERDY after the token graduates on pump.fun (Phase 2).
+- **Rejected** → it's logged on your dashboard as public popularity (Phase 1), and converts into $NERDY after the token graduates on Jupiter (jup.ag) (Phase 2).
 
 ## Stack
 

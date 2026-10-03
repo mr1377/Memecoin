@@ -10,6 +10,7 @@ import { Glasses } from '../components/Logo'
 import Mascot from '../components/Mascot'
 import NerdAvatar from '../components/NerdAvatar'
 import ProfilePhoto from '../components/ProfilePhoto'
+import { jupiterBuyUrl } from '../lib/jupiter'
 import { useStore } from '../lib/store'
 import { seedAvatar } from '../lib/avatar'
 
@@ -40,6 +41,7 @@ function Hero() {
   const { rejectReward: REJECT_REWARD } = useStore((s) => s.settings)
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
+  const tokenMint = useStore((s) => s.settings.tokenMint)
   // Real residents first; NPCs fill the avatar stack until the town grows.
   const faces = useMemo(() => Object.values(profiles).sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0)).slice(0, 5), [profiles])
   const mxRaw = useMotionValue(0)
@@ -58,13 +60,14 @@ function Hero() {
     <section onMouseMove={onMove} className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-10 pt-8 sm:px-6 md:pt-16 lg:grid-cols-[1.1fr_1fr] lg:gap-6 lg:pb-20">
       <div className="relative z-10 text-center lg:text-left">
         <motion.a
-          href="#roadmap"
+          href={tokenMint ? jupiterBuyUrl(tokenMint) : '#roadmap'}
+          {...(tokenMint ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 py-1 pl-1 pr-3 text-xs font-semibold text-white/80 backdrop-blur hover:border-carrot/50"
         >
           <span className="rounded-full bg-carrot px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-ink-950">$NERDY</span>
-          Launching on pump.fun
+          {tokenMint ? 'Live on Jupiter · Buy now' : 'Launching on Jupiter'}
           <ArrowRight className="h-3.5 w-3.5" />
         </motion.a>
 
@@ -394,6 +397,7 @@ function Roadmap() {
   const { freeDailyRequests: FREE_DAILY_REQUESTS, rejectReward: REJECT_REWARD, extraRequestCost: EXTRA_REQUEST_COST } = useStore((s) => s.settings)
   const phase = useStore((s) => s.phase)
   const pct = useStore((s) => s.bondingProgress)
+  const tokenMint = useStore((s) => s.settings.tokenMint)
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const line = useTransform(scrollYProgress, [0.15, 0.6], ['0%', '100%'])
@@ -402,7 +406,7 @@ function Roadmap() {
     {
       n: 1,
       title: 'Pre-graduation',
-      sub: 'While $NERDY bonds on pump.fun',
+      sub: 'While $NERDY bonds on Jupiter',
       points: [`${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant socials reveal', 'Rejections build public popularity', 'Leaderboard of legendary Ls'],
       icon: Shield,
     },
@@ -424,7 +428,7 @@ function Roadmap() {
 
       <motion.div {...reveal} className="card mx-auto mt-12 max-w-3xl p-6">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-mono text-white/60">pump.fun bonding curve</span>
+          <span className="font-mono text-white/60">Jupiter bonding curve</span>
           <span className="font-mono font-bold text-carrot">{pct.toFixed(1)}%</span>
         </div>
         <div className="relative mt-3 h-4 overflow-hidden rounded-full bg-white/5">
@@ -439,6 +443,14 @@ function Roadmap() {
           </motion.div>
         </div>
         <p className="mt-3 text-center text-xs text-white/40">{phase === 1 ? 'Graduation unlocks Phase 2 automatically.' : '🎓 $NERDY graduated. Phase 2 is live.'}</p>
+        {tokenMint && (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <a href={jupiterBuyUrl(tokenMint)} target="_blank" rel="noopener noreferrer" className="btn-primary">
+              Buy $NERDY on Jupiter <ArrowRight className="h-4 w-4" />
+            </a>
+            <span className="max-w-full truncate font-mono text-[11px] text-white/35" title={tokenMint}>CA: {tokenMint}</span>
+          </div>
+        )}
       </motion.div>
 
       <div className="relative mt-16 grid gap-6 md:grid-cols-2">
@@ -549,7 +561,7 @@ function FAQ() {
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
     ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. After $NERDY graduates, each rejection also pays you in tokens.'],
     ['How many requests can I send?', `${FREE_DAILY_REQUESTS} free requests per day, reset at midnight UTC. In Phase 2 you can buy more with $NERDY.`],
-    ['What is graduation?', 'On pump.fun, a token “graduates” when its bonding curve completes and it moves to open liquidity. That’s our trigger for Phase 2.'],
+    ['What is graduation?', '$NERDY launches on Jupiter (jup.ag) with a bonding curve. When the curve fills, the token “graduates” into an open liquidity pool and trades everywhere on Solana. That’s our trigger for Phase 2.'],
     ['Can I farm rejections?', 'You can only request each person once, and requests are capped daily. Shooting your shot is the only strategy.'],
   ]
   const [open, setOpen] = useState(0)

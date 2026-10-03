@@ -116,7 +116,7 @@ export default function Admin() {
               ))}
             </div>
           </div>
-          <NumField label="Bonding curve progress (%)" value={form.bondingProgress} step={0.1} onChange={(v) => setForm({ ...form, bondingProgress: Math.max(0, Math.min(100, v)) })} hint="Shown on the homepage progress bar." />
+          <NumField label="Bonding curve progress (%)" value={form.bondingProgress} step={0.1} onChange={(v) => setForm({ ...form, bondingProgress: Math.max(0, Math.min(100, v)) })} hint="Copy it from your token page on jup.ag. Shown on the homepage progress bar." />
           <NumField label="Free requests per day" value={form.freeDailyRequests} onChange={(v) => setForm({ ...form, freeDailyRequests: v })} />
           <NumField label="$NERDY per rejection (Phase 2)" value={form.rejectReward} onChange={(v) => setForm({ ...form, rejectReward: v })} />
           <NumField label="Extra request price ($NERDY)" value={form.extraRequestCost} onChange={(v) => setForm({ ...form, extraRequestCost: v })} />
@@ -124,7 +124,7 @@ export default function Admin() {
           <label className="block sm:col-span-2">
             <span className="label">$NERDY token mint address</span>
             <input className="input font-mono text-sm" value={form.tokenMint ?? ''} onChange={(e) => setForm({ ...form, tokenMint: e.target.value })} placeholder="Paste the mint address after launch" />
-            <span className="mt-1 block text-xs text-white/40">Needed for on-chain withdrawals. The payout wallet key lives in Vercel (TREASURY_SECRET_KEY), never here.</span>
+            <span className="mt-1 block text-xs text-white/40">Shows a “Buy on Jupiter” button on the homepage and is needed for on-chain withdrawals. The payout wallet key lives in Vercel (TREASURY_SECRET_KEY), never here.</span>
           </label>
         </div>
         <button onClick={save} disabled={saving} className="btn-primary mt-6">

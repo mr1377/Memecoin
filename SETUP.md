@@ -82,9 +82,17 @@ Open the site. You should see the homepage (not "almost ready").
    ```
 
 3. Reload the site. An **Admin panel** link appears on your dashboard. From there you can:
+   - paste the $NERDY mint address (adds a “Buy on Jupiter” button to the homepage),
    - switch phases and update the bonding-curve %,
    - handle reports and verify or remove users,
    - approve withdrawals.
+
+## 5b. Launching $NERDY on Jupiter
+
+1. Go to **[jup.ag/studio](https://jup.ag/studio)**, connect your dev wallet and create the token (name *nerdy*, ticker *NERDY*, logo, and `https://nerdytown.space` as the website).
+2. After launch, copy the **mint address (CA)** from the token page and paste it into **Admin panel → $NERDY token mint address**. The homepage then shows “Live on Jupiter · Buy now” and a **Buy $NERDY on Jupiter** button.
+3. While it bonds, update **Bonding curve progress (%)** in the Admin panel from time to time (Jupiter shows it on the token page).
+4. When Jupiter shows the token as graduated (moved to its liquidity pool), set **Phase 2** in the Admin panel and follow section 6.
 
 ## 6. Later: turning on Phase 2 (after $NERDY graduates)
 
