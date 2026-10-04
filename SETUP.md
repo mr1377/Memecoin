@@ -14,6 +14,8 @@ About 15 minutes. You need a free [Supabase](https://supabase.com) account and y
 2. Open [`supabase/schema.sql`](supabase/schema.sql) from this repo, copy **all** of it, paste, and click **Run**. You should see "Success. No rows returned".
 3. New query again → paste all of [`supabase/bots.sql`](supabase/bots.sql) → **Run**. (This adds the 24 NPC residents. Skip it if you don’t want them.)
 
+> **Already set up the database before October 2026?** Run [`supabase/migrations/001_revenue_share.sql`](supabase/migrations/001_revenue_share.sql) once the same way (SQL Editor → paste → Run). It adds the 100-resident Phase 2 trigger and the monthly revenue share. Running it twice is harmless.
+
 ## 3. Configure login emails
 
 1. **Authentication → URL Configuration**
@@ -83,7 +85,8 @@ Open the site. You should see the homepage (not "almost ready").
 
 3. Reload the site. An **Admin panel** link appears on your dashboard. From there you can:
    - paste the $NERDY mint address (adds a “Buy on Jupiter” button to the homepage),
-   - switch phases and update the bonding-curve %,
+   - switch phases, set the resident goal and update the bonding-curve %,
+   - see this month’s revenue pool and add outside revenue to it,
    - handle reports and verify or remove users,
    - approve withdrawals.
 
@@ -94,7 +97,19 @@ Open the site. You should see the homepage (not "almost ready").
 3. While it bonds, update **Bonding curve progress (%)** in the Admin panel from time to time (Jupiter shows it on the token page).
 4. When Jupiter shows the token as graduated (moved to its liquidity pool), set **Phase 2** in the Admin panel and follow section 6.
 
-## 6. Later: turning on Phase 2 (after $NERDY graduates)
+## 6. Phase 2 and the monthly revenue share
+
+**When Phase 2 starts:** when you switch it on at graduation, **or** automatically once **100 real residents** have joined (NPCs don't count), whichever comes first. You can change the number under **Admin → Real residents for Phase 2**.
+
+> ⚠️ Phase 2 can start by itself, so get steps 1–3 below done before you get close to the goal, or raise the goal for now. Withdrawals need the token and the payout wallet.
+
+**How the revenue share works:**
+- Every $NERDY spent in the app (extra requests) goes into the **current month's pool**. You can add outside income too, like Jupiter creator trading fees: **Admin → Revenue share → Add to pool**.
+- On the 1st of each month (UTC), last month's pool is split among everyone who got **rejected by real residents** that month, in proportion to their rejections (3 of 100 rejections = 3% of the pool). Rejections by NPCs don't count, because NPC answers are automatic and would be free to farm.
+- Shares land in each person's in-app balance. Rounding leftovers, or a month with no rejections, roll over into the next month's pool. Nothing is lost.
+- The payout runs by itself the first time anyone opens the site in the new month. To make it exact even on a quiet day, you can also schedule it: Supabase → **Integrations → Cron** → enable → new job, schedule `5 0 1 * *`, SQL `select public.settle_revenue();`.
+
+**Getting ready:**
 
 1. **Payout wallet.** Create a *brand-new* Solana wallet used only for payouts. Put in it just the $NERDY you plan to pay out plus ~0.1 SOL for fees. Never use your main or dev wallet.
 2. **Vercel environment variables** (server-only, never prefixed with `VITE_`):
@@ -108,10 +123,11 @@ Open the site. You should see the homepage (not "almost ready").
    Redeploy after adding them.
 3. **Admin panel.**
    - Paste the $NERDY mint address.
-   - Set **Phase 2** and click **Save**.
-   - From then on, every rejection by a real user pays the reward, and users can buy extra requests and request withdrawals.
-4. **Withdrawals are approved by you.** Each one appears in **Admin → Withdrawals**; **Approve & send** transfers the tokens on-chain.
-   - This review step matters: people can create fake accounts to reject each other and farm rewards.
+   - At graduation, set **Phase 2** and click **Save** (unless the resident goal already did it).
+   - From then on users can buy extra requests, rejections earn monthly shares, and users can request withdrawals.
+4. **Fund the payout wallet.** Revenue lives in the app's ledger. The tokens people withdraw come from the payout wallet, so keep it topped up with at least what's been paid out. If you add creator fees to the pool, move those tokens into the payout wallet too.
+5. **Withdrawals are approved by you.** Each one appears in **Admin → Withdrawals**; **Approve & send** transfers the tokens on-chain.
+   - This review step matters: people can create fake accounts to reject each other and farm shares.
    - Look at an account's age and activity before approving.
 
 ## Useful SQL

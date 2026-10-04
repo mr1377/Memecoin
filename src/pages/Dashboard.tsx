@@ -94,6 +94,47 @@ function Ring({ left, limit }: { left: number; limit: number }) {
 
 type Tab = 'incoming' | 'sent' | 'matches' | 'ls'
 
+const monthName = (ymd: string, opts: Intl.DateTimeFormatOptions = { month: 'long' }) => new Date(ymd + 'T00:00:00Z').toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' })
+
+/** This month's revenue pool and the share my rejections earn so far. */
+function RevenueShare() {
+  const rev = useStore((s) => s.revenue)
+  if (!rev) return null
+  const share = rev.rejections > 0 ? Math.floor((rev.pool * rev.mine) / rev.rejections) : 0
+  const pct = rev.rejections > 0 ? (rev.mine / rev.rejections) * 100 : 0
+  const [y, m] = rev.month.split('-').map(Number)
+  const payday = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10)
+  return (
+    <div className="mt-5 rounded-2xl border border-carrot/25 bg-carrot/[0.06] p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold">{monthName(rev.month)} revenue pool</p>
+        <p className="shrink-0 font-mono text-[11px] text-white/45">pays {monthName(payday, { month: 'short', day: 'numeric' })}</p>
+      </div>
+      <p className="mt-1 font-display text-3xl font-extrabold">
+        <AnimatedNumber value={rev.pool} />
+        <span className="ml-1.5 text-sm text-carrot">$N</span>
+      </p>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }} className="h-full rounded-full bg-gradient-to-r from-rizz to-carrot" />
+      </div>
+      <p className="mt-2 text-xs text-white/60">
+        {rev.mine > 0 ? (
+          <>
+            Your <b className="text-white">{rev.mine}</b> of {rev.rejections} rejection{rev.rejections === 1 ? '' : 's'} this month → about <b className="text-carrot">{share.toLocaleString()} $NERDY</b>
+          </>
+        ) : (
+          'Get rejected by real residents this month to claim a slice.'
+        )}
+      </p>
+      {rev.last && rev.last.paid > 0 && (
+        <p className="mt-2 border-t border-white/10 pt-2 text-[11px] text-white/45">
+          {monthName(rev.last.month)}: {rev.last.paid.toLocaleString()} $NERDY shared among {rev.last.recipients} nerd{rev.last.recipients === 1 ? '' : 's'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const s = useStore((x) => x)
   const me = useStore(selectMe)!
@@ -113,7 +154,7 @@ export default function Dashboard() {
 
   const daily = dailyInfo(s)
   const { balance, wallet, ledger } = s
-  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, rejectReward: REJECT_REWARD } = s.settings
+  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, realUserGoal: GOAL, phase2Reason } = s.settings
 
   const { incoming, sent, matches, ls, pendingSent } = useMemo(() => {
     const mine = s.requests.filter((r) => r.from === me.id || r.to === me.id)
@@ -234,9 +275,17 @@ export default function Dashboard() {
             {s.phase === 1 ? <Lock className="h-5 w-5" /> : <GraduationCap className="h-5 w-5" />}
           </span>
           <div>
-            <p className="font-semibold">{s.phase === 1 ? `Phase 1 · $NERDY is ${s.bondingProgress.toFixed(1)}% bonded` : 'Phase 2 · $NERDY has graduated 🎓'}</p>
+            <p className="font-semibold">
+              {s.phase === 1
+                ? `Phase 1 · ${Math.min(s.stats.residents, GOAL)}/${GOAL} residents · ${s.bondingProgress.toFixed(0)}% bonded`
+                : phase2Reason === 'residents'
+                  ? `Phase 2 · ${GOAL} residents reached 🎉`
+                  : 'Phase 2 · $NERDY has graduated 🎓'}
+            </p>
             <p className="text-sm text-white/60">
-              {s.phase === 1 ? 'Rejections count as popularity for now. Token rewards unlock at graduation.' : `Every rejection now pays ${REJECT_REWARD} $NERDY. Buy extra requests below.`}
+              {s.phase === 1
+                ? `Phase 2 starts when $NERDY graduates or ${GOAL} real nerds join, whichever comes first. Until then, rejections count as popularity.`
+                : 'Every rejection from a real resident earns you a share of the monthly revenue pool.'}
             </p>
           </div>
         </div>
@@ -400,7 +449,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <button onClick={buy} disabled={s.phase === 1} className="btn-primary mt-3 w-full !py-2.5 text-sm">
-                {s.phase === 1 ? <Lock className="h-4 w-4" /> : <Coins className="h-4 w-4" />} {s.phase === 1 ? 'Locked until graduation' : `Buy for ${(buyN * EXTRA_REQUEST_COST).toLocaleString()} $NERDY`}
+                {s.phase === 1 ? <Lock className="h-4 w-4" /> : <Coins className="h-4 w-4" />} {s.phase === 1 ? 'Unlocks in Phase 2' : `Buy for ${(buyN * EXTRA_REQUEST_COST).toLocaleString()} $NERDY`}
               </button>
             </div>
           </section>
@@ -417,8 +466,10 @@ export default function Dashboard() {
                 <span className="ml-2 text-lg text-carrot">$N</span>
               </p>
               <p className="mt-1 text-xs text-white/50">
-                {s.phase === 1 ? `${me.rejectionsReceived} rejections banked as popularity. Tokens start flowing at graduation.` : `${REJECT_REWARD} $NERDY per rejection · min withdraw ${MIN_WITHDRAW}`}
+                {s.phase === 1 ? `${me.rejectionsReceived} rejections banked as popularity. Revenue share starts in Phase 2.` : `Paid monthly from the revenue share · min withdraw ${MIN_WITHDRAW}`}
               </p>
+
+              {s.phase === 2 && <RevenueShare />}
 
               <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                 {wallet ? (

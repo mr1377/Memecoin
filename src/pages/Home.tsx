@@ -38,7 +38,6 @@ function FloatCard({ className, children, depth, mx, my }: { className: string; 
 }
 
 function Hero() {
-  const { rejectReward: REJECT_REWARD } = useStore((s) => s.settings)
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
   const tokenMint = useStore((s) => s.settings.tokenMint)
@@ -102,7 +101,7 @@ function Hero() {
         </motion.h1>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mx-auto mt-8 max-w-xl text-lg text-white/70 lg:mx-0">
-          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs — and after graduation, every L pays out in <b className="text-carrot">$NERDY</b>.
+          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs — and in Phase 2, every L earns you a cut of the town’s <b className="text-carrot">$NERDY</b> revenue.
         </motion.p>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
@@ -166,7 +165,7 @@ function Hero() {
         </FloatCard>
         <FloatCard depth={0.8} mx={mx} my={my} className="bottom-[4%] left-[8%] [&>div]:[animation-delay:-3.5s]">
           <div className="flex items-center gap-2 rounded-full border-2 border-ink-950 bg-carrot px-3 py-1.5 font-mono text-sm font-bold text-ink-950 shadow-pop">
-            <Coins className="h-4 w-4" /> +{REJECT_REWARD} $NERDY
+            <Coins className="h-4 w-4" /> +1 revenue share
           </div>
         </FloatCard>
         <FloatCard depth={-0.6} mx={mx} my={my} className="right-[6%] top-[2%] [&>div]:[animation-delay:-1s]">
@@ -182,7 +181,7 @@ function Hero() {
 // ------------------------------------------------------------------ MARQUEE
 
 function Marquee() {
-  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Ls convert to tokens', 'Glasses on. Fear off.']
+  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Ls earn revenue share', 'Glasses on. Fear off.']
   const row = [...items, ...items]
   return (
     <div className="overflow-hidden py-8">
@@ -202,7 +201,6 @@ function Marquee() {
 // ------------------------------------------------------------------ WIN-WIN DEMO
 
 function WinWinDemo() {
-  const { rejectReward: REJECT_REWARD } = useStore((s) => s.settings)
   const [state, setState] = useState<'idle' | 'sending' | 'accepted' | 'rejected'>('idle')
   const [pop, setPop] = useState(41)
   const [tokens, setTokens] = useState(0)
@@ -220,7 +218,7 @@ function WinWinDemo() {
       if (outcome === 'accepted') confetti({ ...at, emoji: ['💬', '💘', '🤓'] })
       else {
         setPop((p) => p + 1)
-        if (phase2) setTokens((t) => t + REJECT_REWARD)
+        if (phase2) setTokens((t) => t + 1)
         confetti({ ...at, colors: ['#ff4d8d', '#ff7a1a', '#8b5cf6'], count: 70, emoji: ['🏆', '🤓'] })
       }
     }, 1300)
@@ -294,7 +292,7 @@ function WinWinDemo() {
                   ) : state === 'rejected' ? (
                     <motion.div key="r" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="rounded-2xl border border-rizz/30 bg-rizz/10 p-3 text-center">
                       <p className="text-xs font-semibold uppercase text-rizz">L converted to W</p>
-                      <p className="font-display text-lg font-bold">Popularity {pop} {phase2 && <span className="text-carrot">· {tokens} $NERDY</span>}</p>
+                      <p className="font-display text-lg font-bold">Popularity {pop} {phase2 && <span className="text-carrot">· {tokens} share{tokens === 1 ? '' : 's'}</span>}</p>
                     </motion.div>
                   ) : (
                     <motion.div key="i" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center text-sm text-white/60">
@@ -342,7 +340,7 @@ function WinWinDemo() {
           </div>
           <p className="mt-3 text-white/60">Congrats, it’s logged on your dashboard. Rejections are clout here — the more you shoot, the more popular you get.</p>
           <ul className="mt-5 space-y-2 text-sm">
-            {['Phase 1: +1 public popularity', `Phase 2: +${REJECT_REWARD} $NERDY per rejection`, 'Withdraw to wallet or spend in-app'].map((t) => (
+            {['Phase 1: +1 public popularity', 'Phase 2: +1 share of the monthly revenue pool', 'Withdraw to wallet or spend in-app'].map((t) => (
               <li key={t} className="flex items-center gap-2 text-white/80">
                 <Check className="h-4 w-4 text-rizz" /> {t}
               </li>
@@ -360,8 +358,8 @@ function HowItWorks() {
   const { freeDailyRequests: FREE_DAILY_REQUESTS } = useStore((s) => s.settings)
   const steps = [
     { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign up, add a photo (or generate your inner nerd), write a bio, pick your interests. Your socials stay locked.', color: 'from-grape to-byte' },
-    { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot. ${FREE_DAILY_REQUESTS} free requests every day — more with $NERDY after graduation.`, color: 'from-carrot to-rizz' },
-    { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get their socials. Rejected → you get popularity now, and $NERDY tokens after graduation.', color: 'from-lime to-byte' },
+    { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot. ${FREE_DAILY_REQUESTS} free requests every day — more with $NERDY in Phase 2.`, color: 'from-carrot to-rizz' },
+    { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get their socials. Rejected → you get popularity now, and a cut of the platform’s revenue in Phase 2.', color: 'from-lime to-byte' },
   ]
   return (
     <section className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6">
@@ -394,8 +392,9 @@ function HowItWorks() {
 // ------------------------------------------------------------------ ROADMAP
 
 function Roadmap() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, rejectReward: REJECT_REWARD, extraRequestCost: EXTRA_REQUEST_COST } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, extraRequestCost: EXTRA_REQUEST_COST, realUserGoal: GOAL, phase2Reason } = useStore((s) => s.settings)
   const phase = useStore((s) => s.phase)
+  const residents = useStore((s) => s.stats.residents)
   const pct = useStore((s) => s.bondingProgress)
   const tokenMint = useStore((s) => s.settings.tokenMint)
   const ref = useRef<HTMLDivElement>(null)
@@ -405,16 +404,16 @@ function Roadmap() {
   const phases = [
     {
       n: 1,
-      title: 'Pre-graduation',
-      sub: 'While $NERDY bonds on Jupiter',
+      title: 'Build the town',
+      sub: `While $NERDY bonds on Jupiter and the town grows to ${GOAL} nerds`,
       points: [`${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant socials reveal', 'Rejections build public popularity', 'Leaderboard of legendary Ls'],
       icon: Shield,
     },
     {
       n: 2,
-      title: 'Post-graduation',
-      sub: 'After $NERDY graduates',
-      points: [`Buy extra daily requests (${EXTRA_REQUEST_COST} $NERDY each)`, `Every rejection = ${REJECT_REWARD} $NERDY`, 'Withdraw to your Solana wallet', 'Spend tokens in-app'],
+      title: 'Revenue share',
+      sub: `After graduation or ${GOAL} real residents, whichever comes first`,
+      points: [`Buy extra daily requests (${EXTRA_REQUEST_COST} $NERDY each)`, 'All $NERDY spent in town goes into a monthly pool', 'The pool is split among rejected nerds every month: more Ls, bigger cut', 'Withdraw to your Solana wallet'],
       icon: Rocket,
     },
   ]
@@ -423,7 +422,7 @@ function Roadmap() {
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <Eyebrow>Roadmap</Eyebrow>
         <h2 className="mt-4 text-4xl font-extrabold sm:text-6xl">Two phases. One token.</h2>
-        <p className="mt-5 text-white/60">Profiles, requests, accept/reject and socials reveals work the same in both phases. Graduation just turns your Ls into money.</p>
+        <p className="mt-5 text-white/60">Profiles, requests, accept/reject and socials reveals work the same in both phases. Phase 2 just turns your Ls into money.</p>
       </motion.div>
 
       <motion.div {...reveal} className="card mx-auto mt-12 max-w-3xl p-6">
@@ -442,7 +441,24 @@ function Roadmap() {
             <div className="absolute inset-0 animate-shimmer bg-[linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)] bg-[length:200%_100%]" />
           </motion.div>
         </div>
-        <p className="mt-3 text-center text-xs text-white/40">{phase === 1 ? 'Graduation unlocks Phase 2 automatically.' : '🎓 $NERDY graduated. Phase 2 is live.'}</p>
+        <div className="mt-5 flex items-center justify-between text-sm">
+          <span className="font-mono text-white/60">Real residents</span>
+          <span className="font-mono font-bold text-lime">
+            {residents.toLocaleString()} / {GOAL.toLocaleString()}
+          </span>
+        </div>
+        <div className="relative mt-3 h-4 overflow-hidden rounded-full bg-white/5">
+          <motion.div
+            initial={{ width: 0 }}
+            whileInView={{ width: `${Math.min(100, (residents / GOAL) * 100)}%` }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
+            className="h-full rounded-full bg-gradient-to-r from-byte to-lime"
+          />
+        </div>
+        <p className="mt-3 text-center text-xs text-white/40">
+          {phase === 1 ? 'Whichever bar fills first unlocks Phase 2 automatically.' : phase2Reason === 'residents' ? `🎉 ${GOAL} residents reached. Phase 2 is live.` : '🎓 $NERDY graduated. Phase 2 is live.'}
+        </p>
         {tokenMint && (
           <div className="mt-4 flex flex-col items-center gap-2">
             <a href={jupiterBuyUrl(tokenMint)} target="_blank" rel="noopener noreferrer" className="btn-primary">
@@ -488,7 +504,7 @@ function Roadmap() {
       <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-5">
         {[
           { k: 'Free daily requests', v: FREE_DAILY_REQUESTS, s: '' },
-          { k: 'Per rejection (P2)', v: REJECT_REWARD, s: ' $N' },
+          { k: 'Residents to Phase 2', v: GOAL, s: '' },
           { k: 'Extra request (P2)', v: EXTRA_REQUEST_COST, s: ' $N' },
         ].map((x) => (
           <motion.div {...reveal} key={x.k} className="card p-4 text-center sm:p-6">
@@ -556,12 +572,14 @@ function HallOfFame() {
 // ------------------------------------------------------------------ FAQ
 
 function FAQ() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL } = useStore((s) => s.settings)
   const qs = [
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
-    ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. After $NERDY graduates, each rejection also pays you in tokens.'],
+    ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. In Phase 2, every rejection from a real resident also earns you a share of that month’s revenue pool.'],
     ['How many requests can I send?', `${FREE_DAILY_REQUESTS} free requests per day, reset at midnight UTC. In Phase 2 you can buy more with $NERDY.`],
-    ['What is graduation?', '$NERDY launches on Jupiter (jup.ag) with a bonding curve. When the curve fills, the token “graduates” into an open liquidity pool and trades everywhere on Solana. That’s our trigger for Phase 2.'],
+    ['How does the revenue share work?', 'In Phase 2, every $NERDY spent in town (like buying extra requests) goes into that month’s pool. When the month ends, the pool is split among everyone who got rejected by real residents that month, in proportion to their rejections. 3 rejections out of 100 = 3% of the pool. It lands in your balance on the 1st, ready to withdraw.'],
+    ['When does Phase 2 start?', `When $NERDY graduates on Jupiter or when ${GOAL} real residents have joined, whichever happens first. NPCs don’t count toward the goal.`],
+    ['What is graduation?', '$NERDY launches on Jupiter (jup.ag) with a bonding curve. When the curve fills, the token “graduates” into an open liquidity pool and trades everywhere on Solana. It’s one of the two triggers for Phase 2.'],
     ['Can I farm rejections?', 'You can only request each person once, and requests are capped daily. Shooting your shot is the only strategy.'],
   ]
   const [open, setOpen] = useState(0)

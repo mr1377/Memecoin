@@ -73,7 +73,7 @@ export type WalletProvider = 'Phantom' | 'Solflare' | 'Backpack' | 'Other'
 export interface LedgerEntry {
   id: string
   at: number
-  kind: 'reject-reward' | 'buy-requests' | 'withdraw' | 'adjustment'
+  kind: 'revenue-share' | 'reject-reward' | 'buy-requests' | 'withdraw' | 'adjustment'
   amount: number
   note: string
   status: 'done' | 'requested' | 'processing' | 'sent' | 'failed' | 'rejected'
@@ -86,11 +86,26 @@ export interface Settings {
   phase: 1 | 2
   bondingProgress: number
   freeDailyRequests: number
-  rejectReward: number
+  /** Phase 2 also starts once this many real residents have joined. */
+  realUserGoal: number
+  phase2At: number | null
+  phase2Reason: 'graduation' | 'residents' | null
   extraRequestCost: number
   minWithdraw: number
   tokenMint: string | null
   tokenDecimals: number
+}
+
+/** The monthly revenue-share pool (see supabase/schema.sql: revenue_status). */
+export interface RevenueStatus {
+  /** First day of the current month, YYYY-MM-DD (UTC). */
+  month: string
+  pool: number
+  rejections: number
+  recipients: number
+  /** My Phase 2 rejections this month. */
+  mine: number
+  last: { month: string; pool: number; rejections: number; recipients: number; paid: number; carried: number } | null
 }
 
 export interface Report {

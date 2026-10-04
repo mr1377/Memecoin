@@ -5,7 +5,7 @@
 Utility platform for the **$NERDY** meme coin. Send a partner request to anyone:
 
 - **Accepted** → you instantly get their socials (Instagram, X, Telegram, Snapchat, Discord, TikTok, WhatsApp or email).
-- **Rejected** → it's logged on your dashboard as public popularity (Phase 1), and converts into $NERDY after the token graduates on Jupiter (jup.ag) (Phase 2).
+- **Rejected** → it's logged on your dashboard as public popularity (Phase 1), and in Phase 2 earns a share of the platform's monthly revenue. Phase 2 starts when the token graduates on Jupiter (jup.ag) or when 100 real residents join, whichever comes first.
 
 ## Stack
 
@@ -47,10 +47,11 @@ Everything that matters is enforced in the database (`supabase/schema.sql`), not
 - **One request per pair of people, ever.**
 - **Socials** (`contacts` table) are readable only by their owner and by people whose request that owner accepted.
 - **Counters** (popularity, matches, hearts broken), **balances** and **verified badges** can't be written by users.
-- **Phase 2:** a rejection by a real user pays `reject_reward` $NERDY. NPCs never pay.
+- **Phase 2 trigger:** the admin switches it at graduation, or it switches itself when `real_user_goal` real residents exist (trigger on `settings` / `profiles`).
+- **Revenue share:** $NERDY spent on extra requests (plus admin-added revenue) is pooled per UTC month in `revenue`. `settle_revenue()` splits each finished month's pool among residents rejected by real residents that month, in proportion to their rejections. Dust rolls over and each month is paid once (`distributions`). NPC rejections never count.
 - **Withdrawals** reserve the balance immediately and wait for admin approval, which prevents double-spending.
 - **Blocking** hides both people from each other and prevents requests between them.
 
-NPCs (`supabase/bots.sql`, `is_bot = true`) are built-in residents that answer requests after a few seconds. They look like normal profiles in Explore; an "NPC" tag appears on their profile page, in the accept popup and on the Hall of Fame. They have no socials, never pay $NERDY, and are excluded from homepage stats.
+NPCs (`supabase/bots.sql`, `is_bot = true`) are built-in residents that answer requests after a few seconds. They look like normal profiles in Explore; an "NPC" tag appears on their profile page, in the accept popup and on the Hall of Fame. They have no socials, their rejections never earn revenue shares, and they are excluded from homepage stats.
 
 Avatars are procedurally generated SVG caricatures (`NerdAvatar.tsx`); users can also upload up to 4 photos.

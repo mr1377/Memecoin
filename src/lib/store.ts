@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { Session, SolanaWallet } from '@supabase/supabase-js'
 import { isConfigured, PHOTO_BUCKET, photoUrl, supabase } from './supabase'
-import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, Settings, Social, Wallet } from './types'
+import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, RevenueStatus, Settings, Social, Wallet } from './types'
 import { connectWallet, needsSecondTap, oneStepSignIn, providerLabel, type ConnectedWallet, type WalletOption } from './wallets'
 
 /**
@@ -30,6 +30,7 @@ export interface State {
   blocked: string[]
   isAdmin: boolean
   stats: { residents: number; rejections: number }
+  revenue: RevenueStatus | null
   offline: boolean // backend unreachable
 }
 
@@ -37,7 +38,9 @@ const DEFAULT_SETTINGS: Settings = {
   phase: 1,
   bondingProgress: 0,
   freeDailyRequests: 3,
-  rejectReward: 100,
+  realUserGoal: 100,
+  phase2At: null,
+  phase2Reason: null,
   extraRequestCost: 250,
   minWithdraw: 500,
   tokenMint: null,
@@ -65,6 +68,7 @@ let state: State = {
   blocked: [],
   isAdmin: false,
   stats: { residents: 0, rejections: 0 },
+  revenue: null,
   offline: false,
 }
 
@@ -141,7 +145,9 @@ const mapSettings = (r: Row): Settings => ({
   phase: r.phase as 1 | 2,
   bondingProgress: Number(r.bonding_progress),
   freeDailyRequests: r.free_daily_requests as number,
-  rejectReward: r.reject_reward as number,
+  realUserGoal: (r.real_user_goal as number) ?? 100,
+  phase2At: r.phase2_at ? Date.parse(r.phase2_at as string) : null,
+  phase2Reason: (r.phase2_reason as Settings['phase2Reason']) ?? null,
   extraRequestCost: r.extra_request_cost as number,
   minWithdraw: r.min_withdraw as number,
   tokenMint: (r.token_mint as string) || null,
@@ -158,7 +164,34 @@ const todayUTC = () => new Date().toISOString().slice(0, 10)
 
 // ---------- loading ----------
 
+/** This month's revenue-share pool (+ my rejections when logged in). */
+async function loadRevenue() {
+  const { data } = await supabase.rpc('revenue_status')
+  if (!data) return
+  const d = data as Row
+  const last = d.last as Row | null
+  set({
+    revenue: {
+      month: d.month as string,
+      pool: Number(d.pool),
+      rejections: Number(d.rejections),
+      recipients: Number(d.recipients),
+      mine: Number(d.mine),
+      last: last
+        ? { month: last.month as string, pool: Number(last.pool), rejections: Number(last.rejections), recipients: Number(last.recipients), paid: Number(last.paid), carried: Number(last.carried) }
+        : null,
+    },
+  })
+}
+
+let settledMonth = ''
 async function loadPublic() {
+  // Pays out finished months once a new month starts (idempotent: the database pays each month once).
+  const month = new Date().toISOString().slice(0, 7)
+  if (settledMonth !== month) {
+    const { error } = await supabase.rpc('settle_revenue')
+    if (!error) settledMonth = month
+  }
   const [settings, profiles, stats] = await Promise.all([
     supabase.from('settings').select('*').eq('id', 1).single(),
     supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(1000),
@@ -179,6 +212,7 @@ async function loadPublic() {
     stats: (stats.data as State['stats']) ?? st.stats,
     offline: false,
   }))
+  if (s.phase === 2) await loadRevenue()
 }
 
 async function loadMine() {
@@ -227,6 +261,7 @@ async function loadMine() {
       isAdmin: !!admin.data,
     }
   })
+  if (state.phase === 2) await loadRevenue()
 }
 
 /** Refresh only the profiles touched by a request (cheap counter updates). */
@@ -591,7 +626,7 @@ export const api = {
             phase: s.phase,
             bonding_progress: s.bondingProgress,
             free_daily_requests: s.freeDailyRequests,
-            reject_reward: s.rejectReward,
+            real_user_goal: s.realUserGoal,
             extra_request_cost: s.extraRequestCost,
             min_withdraw: s.minWithdraw,
             token_mint: s.tokenMint?.trim() || null,
@@ -602,6 +637,10 @@ export const api = {
           .select(),
       )
       await loadPublic()
+    },
+    async addRevenue(amount: number, note: string) {
+      unwrap(await supabase.rpc('admin_add_revenue', { p_amount: amount, p_note: note }))
+      await loadRevenue()
     },
     async withdrawals() {
       const res = await supabase.from('ledger').select('*').eq('kind', 'withdraw').order('created_at', { ascending: false }).limit(100)

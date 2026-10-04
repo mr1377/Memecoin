@@ -23,7 +23,7 @@ interface Props {
 }
 
 export default function OutcomeModal({ open, onClose, status, other, me, phase }: Props) {
-  const reward = useStore((s) => s.settings.rejectReward)
+  const pool = useStore((s) => s.revenue?.pool ?? 0)
   const socials = useStore((s) => s.contacts[other.id])
   const paid = phase === 2 && !other.isBot
   useEffect(() => {
@@ -88,8 +88,10 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
               </div>
               <div className={`rounded-2xl border p-4 ${paid ? 'border-carrot/30 bg-carrot/10' : 'border-white/10 bg-white/5'}`}>
                 <Coins className={`mx-auto h-5 w-5 ${paid ? 'text-carrot' : 'text-white/30'}`} />
-                <p className="mt-1 font-display text-3xl font-extrabold">{paid ? `+${reward}` : '🔒'}</p>
-                <p className="text-xs text-white/50">{paid ? '$NERDY earned' : phase === 2 ? 'NPCs don’t pay $NERDY' : 'Tokens unlock in Phase 2'}</p>
+                <p className="mt-1 font-display text-3xl font-extrabold">{paid ? '+1' : '🔒'}</p>
+                <p className="text-xs text-white/50">
+                  {paid ? `share of this month’s ${pool > 0 ? `${pool.toLocaleString()} $NERDY ` : ''}pool` : phase === 2 ? 'NPC rejections don’t earn shares' : 'Revenue share starts in Phase 2'}
+                </p>
               </div>
             </div>
             <div className="mt-5 flex items-center gap-3 rounded-2xl bg-white/5 p-3 text-left text-sm text-white/60">

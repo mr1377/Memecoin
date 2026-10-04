@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { BadgeCheck, Check, ExternalLink, Flag, Loader2, RefreshCw, Rocket, Save, Search, Trash2, Wallet, X } from 'lucide-react'
+import { BadgeCheck, Check, Coins, ExternalLink, Flag, Loader2, Plus, RefreshCw, Rocket, Save, Search, Trash2, Wallet, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Page } from '../components/Layout'
@@ -36,6 +36,10 @@ export default function Admin() {
   const toast = useToast()
   const settings = useStore((s) => s.settings)
   const profiles = useStore((s) => s.profiles)
+  const residentsCount = useStore((s) => s.stats.residents)
+  const revenue = useStore((s) => s.revenue)
+  const [revAmount, setRevAmount] = useState(0)
+  const [revNote, setRevNote] = useState('')
   const [form, setForm] = useState<Settings>(settings)
   const [saving, setSaving] = useState(false)
   const [withdrawals, setWithdrawals] = useState<LedgerEntry[]>([])
@@ -72,7 +76,7 @@ export default function Admin() {
   }
 
   const save = async () => {
-    if (form.phase === 2 && settings.phase === 1 && !confirm('Switch to Phase 2? Rejections from real users will start earning $NERDY.')) return
+    if (form.phase === 2 && settings.phase === 1 && !confirm('Switch to Phase 2 now? Extra requests, the monthly revenue share and withdrawals turn on.')) return
     setSaving(true)
     try {
       await api.admin.saveSettings(form)
@@ -111,14 +115,19 @@ export default function Admin() {
             <div className="grid grid-cols-2 gap-2">
               {([1, 2] as const).map((p) => (
                 <button key={p} onClick={() => setForm({ ...form, phase: p })} className={clsx('rounded-2xl border px-4 py-3 text-sm font-semibold', form.phase === p ? 'border-carrot bg-carrot/15 text-white' : 'border-white/10 bg-white/[0.03] text-white/60')}>
-                  Phase {p} {p === 1 ? '· pre-graduation' : '· graduated'}
+                  Phase {p} {p === 1 ? '· building' : '· revenue share'}
                 </button>
               ))}
             </div>
           </div>
           <NumField label="Bonding curve progress (%)" value={form.bondingProgress} step={0.1} onChange={(v) => setForm({ ...form, bondingProgress: Math.max(0, Math.min(100, v)) })} hint="Copy it from your token page on jup.ag. Shown on the homepage progress bar." />
           <NumField label="Free requests per day" value={form.freeDailyRequests} onChange={(v) => setForm({ ...form, freeDailyRequests: v })} />
-          <NumField label="$NERDY per rejection (Phase 2)" value={form.rejectReward} onChange={(v) => setForm({ ...form, rejectReward: v })} />
+          <NumField
+            label="Real residents for Phase 2"
+            value={form.realUserGoal}
+            onChange={(v) => setForm({ ...form, realUserGoal: Math.max(1, Math.round(v)) })}
+            hint={`${residentsCount} real residents now (NPCs don’t count). Phase 2 starts by itself when this is reached, or when you switch it at graduation.`}
+          />
           <NumField label="Extra request price ($NERDY)" value={form.extraRequestCost} onChange={(v) => setForm({ ...form, extraRequestCost: v })} />
           <NumField label="Minimum withdrawal ($NERDY)" value={form.minWithdraw} onChange={(v) => setForm({ ...form, minWithdraw: v })} />
           <label className="block sm:col-span-2">
@@ -130,6 +139,52 @@ export default function Admin() {
         <button onClick={save} disabled={saving} className="btn-primary mt-6">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save settings
         </button>
+      </Section>
+
+      <Section title="Revenue share" icon={Coins}>
+        {settings.phase === 1 ? (
+          <p className="text-sm text-white/60">Starts in Phase 2. Every $NERDY spent on extra requests goes into the month’s pool; after the month ends it’s split among everyone rejected by real residents, in proportion to their rejections.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              {[
+                ['Pool this month', `${(revenue?.pool ?? 0).toLocaleString()} $N`],
+                ['Rejections', (revenue?.rejections ?? 0).toLocaleString()],
+                ['Nerds sharing', (revenue?.recipients ?? 0).toLocaleString()],
+              ].map(([k, v]) => (
+                <div key={k} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="whitespace-nowrap font-display text-lg font-extrabold sm:text-2xl">{v}</p>
+                  <p className="text-[11px] text-white/50">{k}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-white/45">
+              Paid automatically on the 1st of each month (UTC).
+              {revenue?.last && ` Last payout: ${revenue.last.paid.toLocaleString()} $N to ${revenue.last.recipients} residents (${revenue.last.month.slice(0, 7)})${revenue.last.carried ? `, ${revenue.last.carried.toLocaleString()} carried over` : ''}.`}
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
+              <NumField label="Add revenue ($NERDY)" value={revAmount} onChange={(v) => setRevAmount(Math.max(0, Math.round(v)))} />
+              <label className="block">
+                <span className="label">Note</span>
+                <input className="input text-sm" value={revNote} maxLength={120} onChange={(e) => setRevNote(e.target.value)} placeholder="e.g. Jupiter creator fees" />
+              </label>
+              <button
+                disabled={!revAmount || busy === 'revenue'}
+                onClick={() =>
+                  run('revenue', async () => {
+                    await api.admin.addRevenue(revAmount, revNote)
+                    setRevAmount(0)
+                    setRevNote('')
+                  }, 'Added to this month’s pool')
+                }
+                className="btn-primary !py-3"
+              >
+                {busy === 'revenue' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add to pool
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-white/40">For income from outside the app, like creator trading fees. Make sure the payout wallet actually holds these tokens.</p>
+          </>
+        )}
       </Section>
 
       <Section
