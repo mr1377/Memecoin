@@ -3,8 +3,8 @@ import { Loader2 } from 'lucide-react'
 import { suggestedColor, useWalletOptions, type WalletOption } from '../lib/wallets'
 
 /** Grid of every detected Solana wallet, plus popular ones to install / open in-app. */
-export default function WalletPicker({ onPick, busyId, disabled }: { onPick: (o: WalletOption) => void; busyId?: string | null; disabled?: boolean }) {
-  const options = useWalletOptions()
+export default function WalletPicker({ onPick, busyId, disabled, hideSocial }: { onPick: (o: WalletOption) => void; busyId?: string | null; disabled?: boolean; hideSocial?: boolean }) {
+  const options = useWalletOptions().filter((o) => !(hideSocial && o.id === 'social'))
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

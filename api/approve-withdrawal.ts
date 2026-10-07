@@ -1,7 +1,8 @@
 /**
  * POST /api/approve-withdrawal  { id }   (Authorization: Bearer <admin's Supabase access token>)
  *
- * Sends a requested $NERDY withdrawal on-chain from the treasury wallet.
+ * Sends a requested $NERDY withdrawal (Phase 2) or a verification unlock (any phase) on-chain
+ * from the treasury wallet.
  * Runs on Vercel as a serverless function. Required environment variables:
  *   VITE_SUPABASE_URL           – same as the frontend
  *   SUPABASE_SERVICE_ROLE_KEY   – Supabase → Project settings → API (secret! server only)
@@ -9,25 +10,10 @@
  *   SOLANA_RPC_URL              – optional, defaults to public mainnet RPC (use a paid RPC in production)
  */
 import { createClient } from '@supabase/supabase-js'
-import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, getAssociatedTokenAddressSync, getMint } from '@solana/spl-token'
 import bs58 from 'bs58'
-
-interface Req {
-  method?: string
-  headers: Record<string, string | string[] | undefined>
-  body?: unknown
-}
-interface Res {
-  status(code: number): Res
-  json(body: unknown): void
-}
-
-function parseSecret(raw: string): Keypair {
-  const s = raw.trim()
-  const bytes = s.startsWith('[') ? Uint8Array.from(JSON.parse(s) as number[]) : bs58.decode(s)
-  return Keypair.fromSecretKey(bytes)
-}
+import { parseSecret, rpcUrl, type Req, type Res } from './_shared.js'
 
 export default async function handler(req: Req, res: Res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -53,19 +39,22 @@ export default async function handler(req: Req, res: Res) {
   if (!id || typeof id !== 'string') return res.status(400).json({ error: 'Missing withdrawal id.' })
 
   const { data: settings } = await db.from('settings').select('*').eq('id', 1).single()
-  if (!settings || settings.phase !== 2) return res.status(409).json({ error: 'Payouts only run in Phase 2.' })
-  if (!settings.token_mint) return res.status(409).json({ error: 'Set the $NERDY token mint in the admin panel first.' })
+  if (!settings?.token_mint) return res.status(409).json({ error: 'Set the $NERDY token mint in the admin panel first.' })
 
   // --- claim the withdrawal atomically so it can never be paid twice
   const { data: row } = await db
     .from('ledger')
     .update({ status: 'processing' })
     .eq('id', id)
-    .eq('kind', 'withdraw')
+    .in('kind', ['withdraw', 'unlock'])
     .eq('status', 'requested')
     .select('*')
     .maybeSingle()
   if (!row) return res.status(409).json({ error: 'Withdrawal not found or already handled.' })
+  if (row.kind === 'withdraw' && settings.phase !== 2) {
+    await db.from('ledger').update({ status: 'requested' }).eq('id', id)
+    return res.status(409).json({ error: 'Withdrawals only run in Phase 2.' })
+  }
 
   const fail = async (message: string, status = 500) => {
     // Nothing was broadcast: mark failed, which refunds the user's balance.
@@ -77,7 +66,7 @@ export default async function handler(req: Req, res: Res) {
   let connection: Connection
   let signature: string
   try {
-    connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com', 'confirmed')
+    connection = new Connection(rpcUrl(), 'confirmed')
     const treasury = parseSecret(treasuryKey!)
     const mint = new PublicKey(settings.token_mint)
     const recipient = new PublicKey(row.wallet)

@@ -12,7 +12,6 @@ import Home from './pages/Home'
 import NotFound from './pages/NotFound'
 import Onboarding from './pages/Onboarding'
 import ProfilePage from './pages/Profile'
-import ResetPassword from './pages/ResetPassword'
 import SetupRequired from './pages/SetupRequired'
 
 function RequireAuth({ children, needsProfile = true, admin = false }: { children: ReactNode; needsProfile?: boolean; admin?: boolean }) {
@@ -31,7 +30,6 @@ function RequireAuth({ children, needsProfile = true, admin = false }: { childre
 export default function App() {
   const location = useLocation()
   const configured = useStore((s) => s.configured)
-  const recovering = useStore((s) => s.recovering)
   if (!configured) return <SetupRequired />
   return (
     <div className="noise relative min-h-dvh">
@@ -39,22 +37,17 @@ export default function App() {
       <ScrollManager />
       <TopNav />
       <AnimatePresence mode="wait">
-        {recovering && location.pathname !== '/reset-password' ? (
-          <Navigate to="/reset-password" replace />
-        ) : (
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<Home />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/u/:id" element={<ProfilePage />} />
-            <Route path="/login" element={<Auth mode="login" />} />
-            <Route path="/signup" element={<Auth mode="signup" />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/onboarding" element={<RequireAuth needsProfile={false}><Onboarding /></RequireAuth>} />
-            <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-            <Route path="/admin" element={<RequireAuth admin><Admin /></RequireAuth>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        )}
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<Home />} />
+          <Route path="/explore" element={<Explore />} />
+          <Route path="/u/:id" element={<ProfilePage />} />
+          <Route path="/login" element={<Auth mode="login" />} />
+          <Route path="/signup" element={<Auth mode="signup" />} />
+          <Route path="/onboarding" element={<RequireAuth needsProfile={false}><Onboarding /></RequireAuth>} />
+          <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/admin" element={<RequireAuth admin><Admin /></RequireAuth>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </AnimatePresence>
       <BottomTabs />
     </div>

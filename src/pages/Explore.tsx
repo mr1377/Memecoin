@@ -78,8 +78,8 @@ export default function Explore() {
         arr = arr.sort((a, b) => b.rejectionsReceived - a.rejectionsReceived)
         break
       default:
-        // Real residents first, then verified, then newest.
-        arr = arr.sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0) || (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b.joinedAt - a.joinedAt)
+        // Verified first, then newest.
+        arr = arr.sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b.joinedAt - a.joinedAt)
     }
     return arr
   }, [s.profiles, s.session, q, f, g, myCity])

@@ -1,44 +1,64 @@
 -- =====================================================================
--- Nerdy Town — database setup
--- Run this ONCE in Supabase: Dashboard → SQL Editor → New query → paste → Run.
--- Everything security-relevant (limits, privacy, counters, balances,
--- verification) is enforced here, so a tampered client can't cheat.
--- Everyone signs in with a Solana wallet (an app like Phantom, or the wallet
--- Reown creates for Google / X / email logins), so every account has one.
+-- Nerdy Town — migration 002: wallet/social login only, verification by
+-- locking $NERDY, Phase 2 = 1000 verified residents, no NPCs, 1-token extra
+-- requests. Run ONCE in Supabase → SQL Editor (after 001_revenue_share.sql).
+-- Fresh installs don't need it: schema.sql already includes all of this.
 -- =====================================================================
 
+-- 1. Phase back to 1 under the new rule (Phase 2 = 1000 verified residents).
+--    Done first, while the old phase trigger still allows it.
+update public.settings set real_user_goal = 1000, extra_request_cost = 1, phase = 1;
 
--- ---------------------------------------------------------------------
--- Settings (single row) + admins
--- ---------------------------------------------------------------------
-create table public.settings (
-  id int primary key default 1 check (id = 1),
-  phase int not null default 1 check (phase in (1, 2)),
-  free_daily_requests int not null default 3 check (free_daily_requests between 0 and 50),
-  extra_request_cost int not null default 1 check (extra_request_cost > 0),
-  min_withdraw int not null default 500 check (min_withdraw > 0),
-  -- Verification: lock this many $NERDY with the platform.
-  verify_lock_amount int not null default 100 check (verify_lock_amount > 0),
-  -- Phase 2 starts by itself once this many VERIFIED residents exist. It never goes back.
-  real_user_goal int not null default 1000 check (real_user_goal between 1 and 1000000),
-  phase2_at timestamptz,
-  token_mint text,
-  token_decimals int not null default 6 check (token_decimals between 0 and 12),
-  updated_at timestamptz not null default now()
+-- 2. NPCs out. Their requests, answers and queue entries go with them.
+drop trigger if exists profiles_welcome on public.profiles;
+drop function if exists public._welcome_requests();
+drop function if exists public.tick_bots();
+drop table if exists public.bot_queue;
+delete from public.profiles where is_bot;
+drop trigger if exists profiles_phase on public.profiles;
+drop function if exists public._phase_on_signup();
+alter table public.profiles drop column is_bot;
+
+-- Every profile now belongs to a real login.
+delete from public.profiles p where not exists (select 1 from auth.users u where u.id = p.id);
+alter table public.profiles alter column id drop default;
+alter table public.profiles drop constraint if exists profiles_id_fkey;
+alter table public.profiles add constraint profiles_id_fkey foreign key (id) references auth.users (id) on delete cascade;
+
+-- 3. Settings.
+alter table public.settings drop column if exists bonding_progress;
+alter table public.settings drop column if exists phase2_reason;
+alter table public.settings alter column extra_request_cost set default 1;
+alter table public.settings alter column real_user_goal set default 1000;
+alter table public.settings add column if not exists verify_lock_amount int not null default 100 check (verify_lock_amount > 0);
+
+-- 4. Wallet = the one you signed in with (no separately linked wallet).
+drop function if exists public.link_wallet(text, text);
+drop function if exists public.unlink_wallet();
+drop table if exists public.wallets;
+
+-- 5. Ledger kinds + verification locks.
+alter table public.ledger drop constraint if exists ledger_kind_check;
+alter table public.ledger add constraint ledger_kind_check check (kind in ('revenue-share', 'reject-reward', 'buy-requests', 'withdraw', 'adjustment', 'lock-return', 'unlock'));
+
+-- $NERDY a resident sent to the platform wallet to get verified. Recorded only
+-- by the server (/api/lock) after it checked the transfer on-chain.
+create table public.locks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  amount bigint not null check (amount > 0),
+  wallet text not null,
+  tx_sig text not null unique,
+  status text not null default 'locked' check (status in ('locked', 'unlocked')),
+  created_at timestamptz not null default now(),
+  unlocked_at timestamptz
 );
-insert into public.settings (id) values (1);
+create index locks_user_idx on public.locks (user_id);
 
-create table public.admins (
-  user_id uuid primary key references auth.users (id) on delete cascade
-);
+alter table public.locks enable row level security;
+create policy locks_read on public.locks for select using (user_id = auth.uid() or public.is_admin());
 
-create or replace function public.is_admin() returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.admins where user_id = auth.uid())
-$$;
-
--- The Solana address a user signed in with (Sign in with Solana stores it on
--- the auth identity as "web3:solana:<address>"). Never taken from the client.
+-- 6. Functions (all recreated from schema.sql).
 create or replace function public._wallet(uid uuid) returns text
 language sql stable security definer set search_path = public, auth as $$
   select a from (
@@ -51,38 +71,6 @@ language sql stable security definer set search_path = public, auth as $$
   limit 1
 $$;
 
--- ---------------------------------------------------------------------
--- Profiles (public)
--- ---------------------------------------------------------------------
-create or replace function public.valid_tags(tags text[]) returns boolean
-language sql immutable as $$
-  select coalesce(bool_and(char_length(btrim(t)) between 1 and 24), true) from unnest(tags) t
-$$;
-
-create table public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
-  name text not null check (char_length(btrim(name)) between 2 and 40),
-  age int not null check (age between 18 and 99),
-  gender text not null check (gender in ('Man', 'Woman', 'Non-binary', 'Other')),
-  looking_for text not null check (looking_for in ('Man', 'Woman', 'Non-binary', 'Everyone')),
-  city text not null check (char_length(btrim(city)) between 2 and 40),
-  nerd_class text not null check (nerd_class in ('Code Wizard', 'Math Olympian', 'Lore Keeper', 'Speedrunner', 'Lab Rat', 'Chess Goblin', 'Anime Scholar', 'Crypto Degen')),
-  tagline text not null check (char_length(btrim(tagline)) between 3 and 60),
-  bio text not null check (char_length(btrim(bio)) between 20 and 300),
-  interests text[] not null check (cardinality(interests) between 1 and 6 and public.valid_tags(interests)),
-  photos text[] not null default '{}' check (cardinality(photos) <= 4),
-  avatar jsonb not null check (jsonb_typeof(avatar) = 'object'),
-  verified boolean not null default false,
-  rejections_given int not null default 0,
-  rejections_received int not null default 0,
-  accepts int not null default 0,
-  created_at timestamptz not null default now()
-);
-create index profiles_rejections_idx on public.profiles (rejections_received desc);
-create index profiles_created_idx on public.profiles (created_at desc);
-
--- Users may edit their own profile, but never counters / verified flag,
--- and photos must live in their own storage folder.
 create or replace function public.protect_profile() returns trigger
 language plpgsql as $$
 declare p text;
@@ -114,200 +102,7 @@ begin
   new.bio := btrim(new.bio);
   return new;
 end $$;
-create trigger profiles_protect before insert or update on public.profiles
-for each row execute function public.protect_profile();
 
--- ---------------------------------------------------------------------
--- Blocks & reports
--- ---------------------------------------------------------------------
-create table public.blocks (
-  blocker uuid not null references public.profiles (id) on delete cascade,
-  blocked uuid not null references public.profiles (id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (blocker, blocked),
-  check (blocker <> blocked)
-);
-
--- True when you and `other` have blocked each other in either direction.
-create or replace function public.is_blocked_with(other uuid) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from public.blocks
-    where (blocker = auth.uid() and blocked = other) or (blocker = other and blocked = auth.uid())
-  )
-$$;
-
-create table public.reports (
-  id uuid primary key default gen_random_uuid(),
-  reporter uuid not null references public.profiles (id) on delete cascade,
-  reported uuid not null references public.profiles (id) on delete cascade,
-  reason text not null check (reason in ('Fake profile', 'Harassment', 'Inappropriate photos', 'Underage', 'Spam or scam', 'Other')),
-  details text not null default '' check (char_length(details) <= 500),
-  resolved boolean not null default false,
-  created_at timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------
--- Private contacts (socials). Readable only by the owner and by people
--- whose request the owner ACCEPTED.
--- ---------------------------------------------------------------------
-create or replace function public.valid_socials(s jsonb) returns boolean
-language sql immutable as $$
-  select jsonb_typeof(s) = 'array'
-     and jsonb_array_length(s) between 1 and 5
-     and coalesce((
-       select bool_and(
-         jsonb_typeof(e) = 'object'
-         and e ->> 'platform' in ('Instagram', 'X', 'Telegram', 'Snapchat', 'Discord', 'TikTok', 'WhatsApp', 'Email')
-         and char_length(btrim(coalesce(e ->> 'handle', ''))) between 2 and 60
-       ) from jsonb_array_elements(s) e), false)
-$$;
-
-create table public.contacts (
-  user_id uuid primary key references public.profiles (id) on delete cascade,
-  socials jsonb not null check (public.valid_socials(socials)),
-  updated_at timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------
--- Partner requests
--- ---------------------------------------------------------------------
-create table public.requests (
-  id uuid primary key default gen_random_uuid(),
-  from_id uuid not null references public.profiles (id) on delete cascade,
-  to_id uuid not null references public.profiles (id) on delete cascade,
-  status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
-  seen boolean not null default false,
-  created_at timestamptz not null default now(),
-  resolved_at timestamptz,
-  check (from_id <> to_id)
-);
--- One request per pair of people, in either direction, ever.
-create unique index requests_pair_idx on public.requests (least(from_id, to_id), greatest(from_id, to_id));
-create index requests_from_idx on public.requests (from_id);
-create index requests_to_idx on public.requests (to_id);
-create index requests_rejected_idx on public.requests (resolved_at) where status = 'rejected';
-
-create table public.daily_usage (
-  user_id uuid not null references public.profiles (id) on delete cascade,
-  day date not null,
-  used int not null default 0,
-  bonus int not null default 0,
-  primary key (user_id, day)
-);
-
--- ---------------------------------------------------------------------
--- $NERDY ledger, verification locks, revenue
--- ---------------------------------------------------------------------
-create table public.ledger (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles (id) on delete cascade,
-  kind text not null check (kind in ('revenue-share', 'reject-reward', 'buy-requests', 'withdraw', 'adjustment', 'lock-return', 'unlock')),
-  amount bigint not null,
-  note text not null default '',
-  status text not null default 'done' check (status in ('done', 'requested', 'processing', 'sent', 'failed', 'rejected')),
-  wallet text,
-  tx_sig text,
-  created_at timestamptz not null default now()
-);
-create index ledger_user_idx on public.ledger (user_id, created_at desc);
-
--- $NERDY a resident sent to the platform wallet to get verified. Recorded only
--- by the server (/api/lock) after it checked the transfer on-chain.
-create table public.locks (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles (id) on delete cascade,
-  amount bigint not null check (amount > 0),
-  wallet text not null,
-  tx_sig text not null unique,
-  status text not null default 'locked' check (status in ('locked', 'unlocked')),
-  created_at timestamptz not null default now(),
-  unlocked_at timestamptz
-);
-create index locks_user_idx on public.locks (user_id);
-
--- Platform revenue, pooled per calendar month (UTC) and shared among rejected residents.
-create table public.revenue (
-  id uuid primary key default gen_random_uuid(),
-  month date not null check (extract(day from month) = 1),
-  source text not null check (source in ('requests', 'admin', 'carry-over')),
-  amount bigint not null check (amount > 0),
-  user_id uuid references public.profiles (id) on delete set null,
-  note text not null default '',
-  created_at timestamptz not null default now()
-);
-create index revenue_month_idx on public.revenue (month);
-
--- One row per month that has been paid out.
-create table public.distributions (
-  month date primary key,
-  pool bigint not null,
-  rejections int not null,
-  recipients int not null,
-  paid bigint not null,
-  carried bigint not null,
-  created_at timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------
--- Row level security
--- ---------------------------------------------------------------------
-alter table public.settings enable row level security;
-alter table public.admins enable row level security;
-alter table public.profiles enable row level security;
-alter table public.blocks enable row level security;
-alter table public.reports enable row level security;
-alter table public.contacts enable row level security;
-alter table public.requests enable row level security;
-alter table public.daily_usage enable row level security;
-alter table public.ledger enable row level security;
-alter table public.locks enable row level security;
-alter table public.revenue enable row level security;
-alter table public.distributions enable row level security;
-
-create policy settings_read on public.settings for select using (true);
-create policy settings_admin on public.settings for update using (public.is_admin()) with check (public.is_admin());
-
-create policy admins_self on public.admins for select using (user_id = auth.uid());
-
-create policy profiles_read on public.profiles for select
-  using (auth.uid() is null or not public.is_blocked_with(id));
-create policy profiles_insert on public.profiles for insert with check (id = auth.uid());
-create policy profiles_update on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
-
-create policy blocks_read on public.blocks for select using (blocker = auth.uid());
-create policy blocks_insert on public.blocks for insert with check (blocker = auth.uid());
-create policy blocks_delete on public.blocks for delete using (blocker = auth.uid());
-
-create policy reports_insert on public.reports for insert with check (reporter = auth.uid());
-create policy reports_read on public.reports for select using (reporter = auth.uid() or public.is_admin());
-create policy reports_admin_update on public.reports for update using (public.is_admin());
-
-create policy contacts_read on public.contacts for select using (
-  user_id = auth.uid()
-  or exists (
-    select 1 from public.requests r
-    where r.from_id = auth.uid() and r.to_id = contacts.user_id and r.status = 'accepted'
-  )
-);
-create policy contacts_insert on public.contacts for insert with check (user_id = auth.uid());
-create policy contacts_update on public.contacts for update using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-create policy requests_read on public.requests for select using (from_id = auth.uid() or to_id = auth.uid());
--- No insert/update policies: requests change only through the functions below.
-
-create policy usage_read on public.daily_usage for select using (user_id = auth.uid());
-
-create policy ledger_read on public.ledger for select using (user_id = auth.uid() or public.is_admin());
-
-create policy locks_read on public.locks for select using (user_id = auth.uid() or public.is_admin());
-
-create policy revenue_read on public.revenue for select using (public.is_admin());
-create policy distributions_read on public.distributions for select using (true);
-
--- ---------------------------------------------------------------------
--- Internal helpers (NOT callable by clients)
--- ---------------------------------------------------------------------
 create or replace function public._internal() returns void
 language sql as $$ select set_config('nerdy.internal', 'on', true) $$;
 
@@ -342,7 +137,6 @@ begin
   return r;
 end $$;
 
--- Verification gate for sending and answering requests.
 create or replace function public._require_verified(me uuid) returns void
 language plpgsql stable security definer set search_path = public as $$
 declare p public.profiles;
@@ -355,10 +149,6 @@ begin
   end if;
 end $$;
 
--- ---------------------------------------------------------------------
--- Phase 2 starts once real_user_goal verified residents exist. Clients
--- (admins included) can't set the phase; it only ever moves 1 → 2.
--- ---------------------------------------------------------------------
 create or replace function public._settings_phase() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -373,10 +163,7 @@ begin
   new.updated_at := now();
   return new;
 end $$;
-create trigger settings_phase before insert or update on public.settings
-for each row execute function public._settings_phase();
 
--- Each newly verified resident re-checks the goal.
 create or replace function public._phase_on_verify() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -385,19 +172,10 @@ begin
   end if;
   return new;
 end $$;
-create trigger profiles_phase after update of verified on public.profiles
-for each row execute function public._phase_on_verify();
 
--- ---------------------------------------------------------------------
--- Monthly revenue share. Every $NERDY spent in town (plus anything the
--- admin adds, e.g. creator trading fees) goes into the month's pool. After
--- the month ends, the pool is split among everyone who got rejected that
--- month, in proportion to their rejections. Rounding dust rolls over.
--- ---------------------------------------------------------------------
 create or replace function public._month(t timestamptz) returns date
 language sql immutable as $$ select date_trunc('month', t at time zone 'utc')::date $$;
 
--- Rejections each resident received in a month (Phase 2 only).
 create or replace function public._month_rejections(m date)
 returns table (user_id uuid, n int)
 language sql stable security definer set search_path = public as $$
@@ -442,8 +220,6 @@ begin
   values (m, pool, total, people, paid, pool - paid);
 end $$;
 
--- Pays out every finished month that hasn't been paid yet. Safe to call any
--- time, by anyone: the site calls it on load, and pg_cron can too.
 create or replace function public.settle_revenue() returns int
 language plpgsql security definer set search_path = public as $$
 declare m date; n int := 0;
@@ -460,11 +236,6 @@ begin
   return n;
 end $$;
 
--- ---------------------------------------------------------------------
--- Verification by locking $NERDY
--- ---------------------------------------------------------------------
--- Called only by the server (service role) after it confirmed the on-chain
--- transfer from the user's wallet to the platform wallet.
 create or replace function public.record_lock(p_user uuid, p_tx_sig text, p_amount bigint, p_wallet text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -482,8 +253,6 @@ begin
   update public.profiles set verified = true where id = p_user;
 end $$;
 
--- Gives the locked $NERDY back (sent to the wallet once an admin approves) and
--- removes the verified badge.
 create or replace function public.unlock_verification() returns bigint
 language plpgsql security definer set search_path = public as $$
 declare me uuid := auth.uid(); total bigint; w text;
@@ -502,9 +271,6 @@ begin
   return total;
 end $$;
 
--- ---------------------------------------------------------------------
--- Client API (called with supabase.rpc)
--- ---------------------------------------------------------------------
 create or replace function public.my_wallet() returns text
 language sql stable security definer set search_path = public as $$
   select public._wallet(auth.uid())
@@ -631,7 +397,6 @@ begin
   delete from auth.users where id = me;
 end $$;
 
--- Real numbers for the homepage.
 create or replace function public.public_stats() returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object(
@@ -641,7 +406,6 @@ language sql stable security definer set search_path = public as $$
   ) from public.profiles
 $$;
 
--- This month's pool, your share so far, and the last payout.
 create or replace function public.revenue_status() returns json
 language sql stable security definer set search_path = public as $$
   with m as (select public._month(now()) as month),
@@ -656,7 +420,6 @@ language sql stable security definer set search_path = public as $$
   )
 $$;
 
--- Admin tools ---------------------------------------------------------
 create or replace function public.admin_add_revenue(p_amount bigint, p_note text default '') returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -692,7 +455,14 @@ begin
   delete from auth.users where id = p_user;
 end $$;
 
--- Lock down: internal helpers are not part of the public API.
+-- 7. Triggers.
+drop trigger if exists settings_phase on public.settings;
+create trigger settings_phase before insert or update on public.settings
+for each row execute function public._settings_phase();
+create trigger profiles_phase after update of verified on public.profiles
+for each row execute function public._phase_on_verify();
+
+-- 8. Permissions.
 revoke execute on function public._internal() from public, anon, authenticated;
 revoke execute on function public._resolve(uuid, text) from public, anon, authenticated;
 revoke execute on function public._balance(uuid) from public, anon, authenticated;
@@ -709,26 +479,13 @@ revoke execute on function public.delete_my_account() from anon;
 -- Clients can read only what RLS allows and never write counters directly.
 revoke insert, update, delete on public.requests, public.ledger, public.daily_usage, public.locks, public.revenue, public.distributions from anon, authenticated;
 
--- ---------------------------------------------------------------------
--- Photo storage: public bucket, users write only to their own folder.
--- ---------------------------------------------------------------------
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('photos', 'photos', true, 3145728, array['image/jpeg', 'image/png', 'image/webp'])
-on conflict (id) do nothing;
+-- 9. Counters recomputed from real interactions only; old manual badges cleared
+-- (verified now means "has $NERDY locked").
+select set_config('nerdy.internal', 'on', false);
+update public.profiles p set
+  verified = false,
+  rejections_received = (select count(*) from public.requests r where r.from_id = p.id and r.status = 'rejected'),
+  rejections_given = (select count(*) from public.requests r where r.to_id = p.id and r.status = 'rejected'),
+  accepts = (select count(*) from public.requests r where (r.from_id = p.id or r.to_id = p.id) and r.status = 'accepted');
+select set_config('nerdy.internal', '', false);
 
-create policy photos_insert on storage.objects for insert to authenticated
-  with check (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
-create policy photos_update on storage.objects for update to authenticated
-  using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
-create policy photos_delete on storage.objects for delete to authenticated
-  using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
-
--- ---------------------------------------------------------------------
--- Realtime: live updates for requests (RLS still applies).
--- ---------------------------------------------------------------------
-do $$
-begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    alter publication supabase_realtime add table public.requests;
-  end if;
-end $$;

@@ -1,8 +1,8 @@
 import { getWallets } from '@wallet-standard/app'
 import type { Wallet, WalletAccount } from '@wallet-standard/base'
-import type { SolanaSignMessageFeature } from '@solana/wallet-standard-features'
+import type { SolanaSignMessageFeature, SolanaSignTransactionFeature } from '@solana/wallet-standard-features'
 import { useEffect, useState } from 'react'
-import { connectViaWalletConnect, walletConnectEnabled } from './walletconnect'
+import { connectViaAppKit, walletConnectEnabled } from './walletconnect'
 
 /**
  * Solana wallet discovery via the Wallet Standard: every modern Solana wallet (Phantom, Solflare,
@@ -25,6 +25,10 @@ export interface ConnectedWallet {
   name: string
   address: string
   signMessage: (message: Uint8Array) => Promise<Uint8Array>
+  /** Signs a serialized transaction without sending it; returns the signed bytes. */
+  signTransaction: (tx: Uint8Array) => Promise<Uint8Array>
+  /** Wallet created by a Google / X / email login: it signs inside the page, no app switch. */
+  embedded?: boolean
 }
 
 type ConnectFeature = { 'standard:connect': { connect: () => Promise<{ accounts: readonly WalletAccount[] }> } }
@@ -33,6 +37,9 @@ const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 const isAndroid = () => /Android/i.test(navigator.userAgent)
 
 const MWA_NAME = 'Mobile Wallet Adapter'
+const SOCIAL_ICON =
+  'data:image/svg+xml;base64,' +
+  btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#fff"/><path d="M30.6 20.3c0-.8-.1-1.6-.2-2.3H20v4.4h6a5.1 5.1 0 0 1-2.2 3.3v2.8h3.6c2-1.9 3.2-4.7 3.2-8.2z" fill="#4285f4"/><path d="M20 31c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.7H10v2.9A11 11 0 0 0 20 31z" fill="#34a853"/><path d="M13.7 21.9a6.6 6.6 0 0 1 0-4.2v-2.9H10a11 11 0 0 0 0 10z" fill="#fbbc04"/><path d="M20 13.4c1.6 0 3.1.6 4.3 1.7l3.2-3.2A11 11 0 0 0 10 14.8l3.7 2.9c.9-2.7 3.4-4.3 6.3-4.3z" fill="#ea4335"/></svg>')
 const WC_ICON =
   'data:image/svg+xml;base64,' +
   btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#3396ff"/><path d="M12.2 15.6c4.3-4.2 11.3-4.2 15.6 0l.5.5a.5.5 0 0 1 0 .8l-1.8 1.7a.3.3 0 0 1-.4 0l-.7-.7a8 8 0 0 0-10.9 0l-.8.8a.3.3 0 0 1-.4 0l-1.8-1.8a.5.5 0 0 1 0-.8zm19.3 3.6 1.6 1.6a.5.5 0 0 1 0 .8l-7.1 7a.6.6 0 0 1-.8 0l-5-5a.1.1 0 0 0-.2 0l-5 5a.6.6 0 0 1-.8 0l-7.1-7a.5.5 0 0 1 0-.8l1.6-1.6a.6.6 0 0 1 .8 0l5 5a.1.1 0 0 0 .2 0l5-5a.6.6 0 0 1 .8 0l5 5a.1.1 0 0 0 .2 0l5-5a.6.6 0 0 1 .8 0z" fill="#fff"/></svg>')
@@ -54,6 +61,9 @@ export async function registerMobileWalletAdapter() {
     onWalletNotFound: m.createDefaultWalletNotFoundHandler(),
   })
 }
+/** Google / X / Discord / Apple / email login via Reown (creates a Solana wallet for the user). */
+export const SOCIAL_OPTION: WalletOption | null = walletConnectEnabled ? { id: 'social', name: 'Google, X or email', hint: 'No wallet app needed', icon: SOCIAL_ICON, installed: true } : null
+
 const here = () => encodeURIComponent(window.location.href)
 const ref = () => encodeURIComponent(window.location.origin)
 
@@ -80,6 +90,7 @@ function listOptions(): WalletOption[] {
       : { id: `std:${w.name}`, name: w.name, icon: w.icon, installed: true },
   )
   const mobile = isMobile()
+  if (SOCIAL_OPTION) opts.unshift(SOCIAL_OPTION)
   if (walletConnectEnabled) opts.push({ id: 'walletconnect', name: 'WalletConnect', hint: mobile ? 'Trust, OKX, 300+' : 'Scan with phone', icon: WC_ICON, installed: true })
   for (const s of SUGGESTED) {
     if (opts.some((o) => sameWallet(o.name, s.name))) continue
@@ -114,9 +125,12 @@ export function useWalletOptions() {
   return options
 }
 
-/** Connect to an installed wallet (or send the user to get it) and return a uniform signer. */
-export async function connectWallet(option: WalletOption): Promise<ConnectedWallet> {
-  if (option.id === 'walletconnect') return connectViaWalletConnect()
+/**
+ * Connect to a wallet (or send the user to get it) and return a uniform signer.
+ * `expected`: the address we need (verification) — an AppKit session already on it is reused.
+ */
+export async function connectWallet(option: WalletOption, expected?: string): Promise<ConnectedWallet> {
+  if (option.id === 'walletconnect' || option.id === 'social') return connectViaAppKit({ social: option.id === 'social', expected })
   if (!option.installed) {
     if (option.getUrl) {
       if (isMobile()) window.location.href = option.getUrl
@@ -135,12 +149,18 @@ export async function connectWallet(option: WalletOption): Promise<ConnectedWall
   }
   if (!account) throw new Error(`No Solana account found in ${option.name}.`)
   const signFeature = (wallet.features as unknown as SolanaSignMessageFeature)['solana:signMessage']
+  const txFeature = (wallet.features as unknown as Partial<SolanaSignTransactionFeature>)['solana:signTransaction']
   return {
     name: wallet.name,
     address: account.address,
     signMessage: async (message) => {
       const [out] = await signFeature.signMessage({ account: account!, message })
       return out.signature
+    },
+    signTransaction: async (transaction) => {
+      if (!txFeature) throw new Error(`${wallet.name} can’t sign transactions here. Try Phantom, Solflare or a Google / X / email login.`)
+      const [out] = await txFeature.signTransaction({ account: account!, transaction, chain: 'solana:mainnet' })
+      return out.signedTransaction
     },
   }
 }
@@ -166,12 +186,6 @@ export function oneStepSignIn(option: WalletOption) {
 }
 
 /** Signing in a separate trip must start from a fresh tap on phones and with WalletConnect. */
-export const needsSecondTap = (option: WalletOption) => option.id === 'walletconnect' || isMobile()
+export const needsSecondTap = (option: WalletOption) => option.id === 'walletconnect' || option.id === 'social' || isMobile()
 
 export const shortAddress = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`
-
-/** Our database stores one of these labels; any other wallet is stored as "Other". */
-export function providerLabel(name: string): 'Phantom' | 'Solflare' | 'Backpack' | 'Other' {
-  for (const p of ['Phantom', 'Solflare', 'Backpack'] as const) if (sameWallet(name, p)) return p
-  return 'Other'
-}

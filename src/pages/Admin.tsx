@@ -37,6 +37,7 @@ export default function Admin() {
   const settings = useStore((s) => s.settings)
   const profiles = useStore((s) => s.profiles)
   const residentsCount = useStore((s) => s.stats.residents)
+  const verifiedCount = useStore((s) => s.stats.verified)
   const revenue = useStore((s) => s.revenue)
   const [revAmount, setRevAmount] = useState(0)
   const [revNote, setRevNote] = useState('')
@@ -76,7 +77,6 @@ export default function Admin() {
   }
 
   const save = async () => {
-    if (form.phase === 2 && settings.phase === 1 && !confirm('Switch to Phase 2 now? Extra requests, the monthly revenue share and withdrawals turn on.')) return
     setSaving(true)
     try {
       await api.admin.saveSettings(form)
@@ -91,7 +91,7 @@ export default function Admin() {
   const residents = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return Object.values(profiles)
-      .filter((p) => !p.isBot && (!needle || p.name.toLowerCase().includes(needle) || p.city.toLowerCase().includes(needle)))
+      .filter((p) => (!needle || p.name.toLowerCase().includes(needle) || p.city.toLowerCase().includes(needle)))
       .sort((a, b) => b.joinedAt - a.joinedAt)
       .slice(0, 30)
   }, [profiles, q])
@@ -110,30 +110,31 @@ export default function Admin() {
 
       <Section title="Phase & token" icon={Rocket}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
+          <div className="sm:col-span-2">
             <span className="label">Phase</span>
-            <div className="grid grid-cols-2 gap-2">
-              {([1, 2] as const).map((p) => (
-                <button key={p} onClick={() => setForm({ ...form, phase: p })} className={clsx('rounded-2xl border px-4 py-3 text-sm font-semibold', form.phase === p ? 'border-carrot bg-carrot/15 text-white' : 'border-white/10 bg-white/[0.03] text-white/60')}>
-                  Phase {p} {p === 1 ? '· building' : '· revenue share'}
-                </button>
-              ))}
+            <div className={clsx('rounded-2xl border px-4 py-3 text-sm', settings.phase === 2 ? 'border-lime/40 bg-lime/10' : 'border-white/10 bg-white/[0.03]')}>
+              <b>Phase {settings.phase}</b>{' '}
+              <span className="text-white/60">
+                {settings.phase === 1
+                  ? `· ${verifiedCount.toLocaleString()} of ${settings.realUserGoal.toLocaleString()} verified residents. Phase 2 starts by itself at the goal and can’t be switched by hand.`
+                  : `· live since ${settings.phase2At ? new Date(settings.phase2At).toLocaleDateString() : '—'}. It never goes back.`}
+              </span>
             </div>
           </div>
-          <NumField label="Bonding curve progress (%)" value={form.bondingProgress} step={0.1} onChange={(v) => setForm({ ...form, bondingProgress: Math.max(0, Math.min(100, v)) })} hint="Copy it from your token page on jup.ag. Shown on the homepage progress bar." />
           <NumField label="Free requests per day" value={form.freeDailyRequests} onChange={(v) => setForm({ ...form, freeDailyRequests: v })} />
           <NumField
-            label="Real residents for Phase 2"
+            label="Verified residents for Phase 2"
             value={form.realUserGoal}
             onChange={(v) => setForm({ ...form, realUserGoal: Math.max(1, Math.round(v)) })}
-            hint={`${residentsCount} real residents now (NPCs don’t count). Phase 2 starts by itself when this is reached, or when you switch it at graduation.`}
+            hint={`${verifiedCount.toLocaleString()} verified of ${residentsCount.toLocaleString()} residents now.`}
           />
+          <NumField label="Verification lock ($NERDY)" value={form.verifyLockAmount} onChange={(v) => setForm({ ...form, verifyLockAmount: Math.max(1, Math.round(v)) })} hint="Applies to new locks. Existing verified residents keep their badge." />
           <NumField label="Extra request price ($NERDY)" value={form.extraRequestCost} onChange={(v) => setForm({ ...form, extraRequestCost: v })} />
           <NumField label="Minimum withdrawal ($NERDY)" value={form.minWithdraw} onChange={(v) => setForm({ ...form, minWithdraw: v })} />
           <label className="block sm:col-span-2">
             <span className="label">$NERDY token mint address</span>
             <input className="input font-mono text-sm" value={form.tokenMint ?? ''} onChange={(e) => setForm({ ...form, tokenMint: e.target.value })} placeholder="Paste the mint address after launch" />
-            <span className="mt-1 block text-xs text-white/40">Shows a “Buy on Jupiter” button on the homepage and is needed for on-chain withdrawals. The payout wallet key lives in Vercel (TREASURY_SECRET_KEY), never here.</span>
+            <span className="mt-1 block text-xs text-white/40">Turns on verification (locking), shows a “Buy on Jupiter” button on the homepage and is needed for payouts. The payout wallet key lives in Vercel (TREASURY_SECRET_KEY), never here.</span>
           </label>
         </div>
         <button onClick={save} disabled={saving} className="btn-primary mt-6">
@@ -143,7 +144,7 @@ export default function Admin() {
 
       <Section title="Revenue share" icon={Coins}>
         {settings.phase === 1 ? (
-          <p className="text-sm text-white/60">Starts in Phase 2. Every $NERDY spent on extra requests goes into the month’s pool; after the month ends it’s split among everyone rejected by real residents, in proportion to their rejections.</p>
+          <p className="text-sm text-white/60">Starts in Phase 2. Every $NERDY spent on extra requests goes into the month’s pool; after the month ends it’s split among everyone who got rejected that month, in proportion to their rejections.</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-3 text-center">
@@ -196,12 +197,13 @@ export default function Admin() {
           </button>
         }
       >
-        {!pending.length && <p className="text-sm text-white/50">No pending withdrawals.</p>}
+        {!pending.length && <p className="text-sm text-white/50">No pending payouts. Withdrawals and verification unlocks show up here.</p>}
         <ul className="space-y-2">
           {pending.map((w) => (
             <li key={w.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
               <div className="min-w-0 flex-1">
                 <Link to={`/u/${w.userId}`} className="font-semibold hover:text-carrot">{name(w.userId)}</Link>
+                {w.kind === 'unlock' && <span className="ml-2 rounded-full bg-lime/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-lime">Unlock</span>}
                 <p className="font-mono text-xs text-white/50">
                   {Math.abs(w.amount).toLocaleString()} $NERDY → {w.wallet?.slice(0, 6)}…{w.wallet?.slice(-6)} · {new Date(w.at).toLocaleString()}
                 </p>
@@ -213,7 +215,7 @@ export default function Admin() {
                 <span className="chip text-byte">Processing…</span>
               ) : (
                 <div className="flex gap-2">
-                  <button onClick={() => run(w.id, () => api.admin.rejectWithdrawal(w.id), 'Withdrawal rejected and refunded')} disabled={!!busy} className="chip py-2 hover:border-rizz/50 hover:text-rizz">
+                  <button onClick={() => run(w.id, () => api.admin.rejectWithdrawal(w.id), 'Rejected · kept in their app balance')} disabled={!!busy} className="chip py-2 hover:border-rizz/50 hover:text-rizz">
                     <X className="h-3.5 w-3.5" /> Reject
                   </button>
                   <button
@@ -275,7 +277,7 @@ export default function Admin() {
                   </button>
                   {p && (
                     <button
-                      onClick={() => confirm(`Permanently remove ${p.name}'s account?`) && run(r.id, async () => { await api.admin.removeProfile(r.reported); await api.admin.resolveReport(r.id) }, 'User removed')}
+                      onClick={() => confirm(`Permanently remove ${p.name}'s account? Any $NERDY they have locked stays with Nerdy Town.`) && run(r.id, async () => { await api.admin.removeProfile(r.reported); await api.admin.resolveReport(r.id) }, 'User removed')}
                       disabled={!!busy}
                       className="chip py-2 hover:border-rizz/50 hover:text-rizz"
                     >

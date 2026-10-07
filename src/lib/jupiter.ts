@@ -1,4 +1,4 @@
-/** $NERDY launches on Jupiter Studio (jup.ag): a bonding curve that graduates into an open liquidity pool. */
+/** $NERDY trades on Jupiter (jup.ag). */
 const SOL_MINT = 'So11111111111111111111111111111111111111112'
 
 /** Jupiter swap page with SOL → $NERDY preselected. */

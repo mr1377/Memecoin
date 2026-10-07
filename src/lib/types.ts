@@ -41,7 +41,6 @@ export interface Profile {
   rejectionsReceived: number
   accepts: number
   verified?: boolean
-  isBot?: boolean
 }
 
 export type SocialPlatform = 'Instagram' | 'X' | 'Telegram' | 'Snapchat' | 'Discord' | 'TikTok' | 'WhatsApp' | 'Email'
@@ -63,17 +62,11 @@ export interface PartnerRequest {
   seen?: boolean
 }
 
-export interface Wallet {
-  address: string
-  provider: WalletProvider
-}
-
-export type WalletProvider = 'Phantom' | 'Solflare' | 'Backpack' | 'Other'
 
 export interface LedgerEntry {
   id: string
   at: number
-  kind: 'revenue-share' | 'reject-reward' | 'buy-requests' | 'withdraw' | 'adjustment'
+  kind: 'revenue-share' | 'reject-reward' | 'buy-requests' | 'withdraw' | 'adjustment' | 'lock-return' | 'unlock'
   amount: number
   note: string
   status: 'done' | 'requested' | 'processing' | 'sent' | 'failed' | 'rejected'
@@ -84,12 +77,12 @@ export interface LedgerEntry {
 
 export interface Settings {
   phase: 1 | 2
-  bondingProgress: number
   freeDailyRequests: number
-  /** Phase 2 also starts once this many real residents have joined. */
+  /** Phase 2 starts by itself once this many verified residents exist. */
   realUserGoal: number
   phase2At: number | null
-  phase2Reason: 'graduation' | 'residents' | null
+  /** $NERDY to lock for the verified badge (needed to send / answer requests). */
+  verifyLockAmount: number
   extraRequestCost: number
   minWithdraw: number
   tokenMint: string | null

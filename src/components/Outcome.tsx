@@ -3,7 +3,6 @@ import { Coins, Flame } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../lib/store'
-import { Gamepad2 } from 'lucide-react'
 import type { Profile } from '../lib/types'
 import AnimatedNumber from './AnimatedNumber'
 import { confetti } from './Confetti'
@@ -25,7 +24,7 @@ interface Props {
 export default function OutcomeModal({ open, onClose, status, other, me, phase }: Props) {
   const pool = useStore((s) => s.revenue?.pool ?? 0)
   const socials = useStore((s) => s.contacts[other.id])
-  const paid = phase === 2 && !other.isBot
+  const paid = phase === 2
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => {
@@ -61,12 +60,7 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
               {other.name.split(' ')[0]} said <span className="text-lime">yes!</span>
             </h2>
             <p className="mt-2 text-white/60">Their socials are yours. Slide in. Be cool. (You won’t be. That’s fine.)</p>
-            {other.isBot ? (
-              <div className="mt-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-sm text-white/70">
-                <Gamepad2 className="h-6 w-6 shrink-0 text-grape-300" />
-                {other.name.split(' ')[0]} is a Nerdy Town NPC — a built-in resident — so there are no socials to reveal. Real residents share theirs when they accept.
-              </div>
-            ) : socials ? (
+            {socials ? (
               <SocialsReveal socials={socials} className="mt-6 text-left" />
             ) : (
               <p className="mt-6 text-sm text-white/50">Loading their socials…</p>
@@ -90,7 +84,7 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
                 <Coins className={`mx-auto h-5 w-5 ${paid ? 'text-carrot' : 'text-white/30'}`} />
                 <p className="mt-1 font-display text-3xl font-extrabold">{paid ? '+1' : '🔒'}</p>
                 <p className="text-xs text-white/50">
-                  {paid ? `share of this month’s ${pool > 0 ? `${pool.toLocaleString()} $NERDY ` : ''}pool` : phase === 2 ? 'NPC rejections don’t earn shares' : 'Revenue share starts in Phase 2'}
+                  {paid ? `share of this month’s ${pool > 0 ? `${pool.toLocaleString()} $NERDY ` : ''}pool` : 'Revenue share starts in Phase 2'}
                 </p>
               </div>
             </div>

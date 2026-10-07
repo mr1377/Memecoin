@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import type { Session, SolanaWallet } from '@supabase/supabase-js'
 import { isConfigured, PHOTO_BUCKET, photoUrl, supabase } from './supabase'
-import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, RevenueStatus, Settings, Social, Wallet } from './types'
-import { connectWallet, needsSecondTap, oneStepSignIn, providerLabel, type ConnectedWallet, type WalletOption } from './wallets'
+import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, RevenueStatus, Settings, Social } from './types'
+import { connectWallet, needsSecondTap, oneStepSignIn, shortAddress, type ConnectedWallet, type WalletOption } from './wallets'
 
 /**
  * Client-side cache of the Supabase backend. All rules (limits, privacy, balances)
@@ -13,35 +13,33 @@ export interface State {
   configured: boolean
   ready: boolean
   session: string | null
-  email: string | null
-  emailConfirmed: boolean
-  recovering: boolean // arrived via password-reset link
   profiles: Record<string, Profile>
   requests: PartnerRequest[]
   settings: Settings
   phase: 1 | 2
-  bondingProgress: number
   usage: { used: number; bonus: number }
   balance: number
   ledger: LedgerEntry[]
-  wallet: Wallet | null
+  /** The Solana address this account signs in with (also where payouts go). */
+  wallet: string | null
+  /** $NERDY I currently have locked for verification. */
+  locked: number
   myContacts: Social[]
   contacts: Record<string, Social[]> // socials revealed to me (accepted requests I sent)
   blocked: string[]
   isAdmin: boolean
-  stats: { residents: number; rejections: number }
+  stats: { residents: number; verified: number; rejections: number }
   revenue: RevenueStatus | null
   offline: boolean // backend unreachable
 }
 
 const DEFAULT_SETTINGS: Settings = {
   phase: 1,
-  bondingProgress: 0,
   freeDailyRequests: 3,
-  realUserGoal: 100,
+  realUserGoal: 1000,
   phase2At: null,
-  phase2Reason: null,
-  extraRequestCost: 250,
+  verifyLockAmount: 100,
+  extraRequestCost: 1,
   minWithdraw: 500,
   tokenMint: null,
   tokenDecimals: 6,
@@ -51,23 +49,20 @@ let state: State = {
   configured: isConfigured,
   ready: !isConfigured,
   session: null,
-  email: null,
-  emailConfirmed: false,
-  recovering: false,
   profiles: {},
   requests: [],
   settings: DEFAULT_SETTINGS,
   phase: 1,
-  bondingProgress: 0,
   usage: { used: 0, bonus: 0 },
   balance: 0,
   ledger: [],
   wallet: null,
+  locked: 0,
   myContacts: [],
   contacts: {},
   blocked: [],
   isAdmin: false,
-  stats: { residents: 0, rejections: 0 },
+  stats: { residents: 0, verified: 0, rejections: 0 },
   revenue: null,
   offline: false,
 }
@@ -115,7 +110,6 @@ function mapProfile(r: Row): Profile {
     rejectionsReceived: r.rejections_received as number,
     accepts: r.accepts as number,
     verified: r.verified as boolean,
-    isBot: r.is_bot as boolean,
   }
 }
 
@@ -143,11 +137,10 @@ const mapLedger = (r: Row): LedgerEntry => ({
 
 const mapSettings = (r: Row): Settings => ({
   phase: r.phase as 1 | 2,
-  bondingProgress: Number(r.bonding_progress),
   freeDailyRequests: r.free_daily_requests as number,
-  realUserGoal: (r.real_user_goal as number) ?? 100,
+  realUserGoal: (r.real_user_goal as number) ?? 1000,
   phase2At: r.phase2_at ? Date.parse(r.phase2_at as string) : null,
-  phase2Reason: (r.phase2_reason as Settings['phase2Reason']) ?? null,
+  verifyLockAmount: (r.verify_lock_amount as number) ?? 100,
   extraRequestCost: r.extra_request_cost as number,
   minWithdraw: r.min_withdraw as number,
   tokenMint: (r.token_mint as string) || null,
@@ -207,7 +200,6 @@ async function loadPublic() {
   set((st) => ({
     settings: s,
     phase: s.phase,
-    bondingProgress: s.bondingProgress,
     profiles: { ...map, ...(st.session && st.profiles[st.session] && !map[st.session] ? { [st.session]: st.profiles[st.session] } : {}) },
     stats: (stats.data as State['stats']) ?? st.stats,
     offline: false,
@@ -218,13 +210,14 @@ async function loadPublic() {
 async function loadMine() {
   const me = state.session
   if (!me) return
-  const [profile, requests, usage, balance, ledger, wallet, contacts, blocks, admin] = await Promise.all([
+  const [profile, requests, usage, balance, ledger, wallet, locks, contacts, blocks, admin] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', me).maybeSingle(),
     supabase.from('requests').select('*').or(`from_id.eq.${me},to_id.eq.${me}`).order('created_at', { ascending: false }),
     supabase.from('daily_usage').select('*').eq('user_id', me).eq('day', todayUTC()).maybeSingle(),
     supabase.rpc('my_balance'),
     supabase.from('ledger').select('*').eq('user_id', me).order('created_at', { ascending: false }).limit(50),
-    supabase.from('wallets').select('*').eq('user_id', me).maybeSingle(),
+    supabase.rpc('my_wallet'),
+    supabase.from('locks').select('amount').eq('user_id', me).eq('status', 'locked'),
     supabase.from('contacts').select('*'), // RLS: mine + those revealed to me
     supabase.from('blocks').select('blocked'),
     supabase.from('admins').select('user_id').eq('user_id', me).maybeSingle(),
@@ -254,7 +247,8 @@ async function loadMine() {
       usage: { used: usage.data?.used ?? 0, bonus: usage.data?.bonus ?? 0 },
       balance: Number(balance.data ?? 0),
       ledger: (ledger.data ?? []).map(mapLedger),
-      wallet: wallet.data ? { address: wallet.data.address, provider: wallet.data.provider } : null,
+      wallet: (wallet.data as string | null) ?? null,
+      locked: (locks.data ?? []).reduce((a, l) => a + Number(l.amount), 0),
       myContacts: mine,
       contacts: contactMap,
       blocked: (blocks.data ?? []).map((b) => b.blocked as string),
@@ -285,9 +279,8 @@ function scheduleRefresh() {
   }, 250)
 }
 
-// Live updates + bot answers
+// Live updates
 let channel: ReturnType<typeof supabase.channel> | null = null
-let botTimer: number | undefined
 
 function startLive(me: string) {
   stopLive()
@@ -296,36 +289,28 @@ function startLive(me: string) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'requests', filter: `from_id=eq.${me}` }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'requests', filter: `to_id=eq.${me}` }, scheduleRefresh)
     .subscribe()
-  botTimer = window.setInterval(async () => {
-    const waitingOnBot = state.requests.some((r) => r.from === me && r.status === 'pending' && state.profiles[r.to]?.isBot)
-    if (!waitingOnBot) return
-    const { data } = await supabase.rpc('tick_bots')
-    if (data) scheduleRefresh()
-  }, 2000)
 }
 function stopLive() {
   if (channel) supabase.removeChannel(channel)
   channel = null
-  clearInterval(botTimer)
 }
 
 async function applySession(session: Session | null) {
   const id = session?.user.id ?? null
   const changed = id !== state.session
-  set({ session: id, email: session?.user.email ?? null, emailConfirmed: !!session?.user.email_confirmed_at })
+  set({ session: id })
   if (!changed) return
   if (id) {
     await loadMine()
     startLive(id)
   } else {
     stopLive()
-    set({ requests: [], usage: { used: 0, bonus: 0 }, balance: 0, ledger: [], wallet: null, myContacts: [], contacts: {}, blocked: [], isAdmin: false })
+    set({ requests: [], usage: { used: 0, bonus: 0 }, balance: 0, ledger: [], wallet: null, locked: 0, myContacts: [], contacts: {}, blocked: [], isAdmin: false })
   }
 }
 
 if (isConfigured) {
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'PASSWORD_RECOVERY') set({ recovering: true })
+  supabase.auth.onAuthStateChange((_event, session) => {
     // Defer: calling Supabase inside this callback can deadlock the auth lock.
     setTimeout(() => applySession(session), 0)
   })
@@ -388,13 +373,9 @@ export interface ProfileInput {
 /** A photo in the editor: either already uploaded (path) or a new blob to upload. */
 export type PhotoDraft = { path: string; url: string } | { blob: Blob; url: string }
 
-declare const __SITE_URL__: string
-/** Where email links send people: the public production address, not a private preview URL. */
-const siteUrl = () => __SITE_URL__ || window.location.origin
-
 const WALLET_STATEMENT = 'Sign in to Nerdy Town. I confirm I am 18 or older. This does not send a transaction or cost any fees.'
 
-async function finishWalletSignIn(adapter: SolanaWallet, who: () => { name: string; address: string } | null) {
+async function finishWalletSignIn(adapter: SolanaWallet) {
   let res: Awaited<ReturnType<typeof supabase.auth.signInWithWeb3>>
   try {
     res = await supabase.auth.signInWithWeb3({ chain: 'solana', wallet: adapter, statement: WALLET_STATEMENT })
@@ -409,70 +390,46 @@ async function finishWalletSignIn(adapter: SolanaWallet, who: () => { name: stri
     throw new Error(error.message)
   }
   await applySession(data.session)
-  // Use the sign-in wallet for Phase 2 payouts too. New users have no profile yet, so it's
-  // remembered and linked right after onboarding creates the profile.
-  const w = who()
-  if (w) pendingWallet = { address: w.address, provider: providerLabel(w.name) }
-  await linkPendingWallet()
   return { hasProfile: !!(data.session && state.profiles[data.session.user.id]) }
 }
 
-/** Wallet used to sign in, waiting to be linked for payouts once a profile exists. */
-let pendingWallet: { address: string; provider: string } | null = null
-async function linkPendingWallet() {
-  const me = state.session
-  if (!pendingWallet || !me || !state.profiles[me] || state.wallet) return
-  const { address, provider } = pendingWallet
-  pendingWallet = null
-  // Best effort: skipped silently if this wallet is already linked to another account.
-  const { error } = await supabase.rpc('link_wallet', { p_address: address, p_provider: provider })
-  if (!error) await loadMine()
+/** Calls /api/lock (verification) as the logged-in user. */
+async function lockApi(body: Record<string, string>): Promise<{ tx?: string; pending?: boolean; signature?: string; verified?: boolean }> {
+  const { data } = await supabase.auth.getSession()
+  const r = await fetch('/api/lock', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${data.session?.access_token}` },
+    body: JSON.stringify(body),
+  })
+  const out = await r.json().catch(() => ({}))
+  if (!r.ok && r.status !== 202) throw new Error(out.error || `Verification failed (${r.status})`)
+  return out
 }
+const toBase64 = (b: Uint8Array) => btoa(Array.from(b, (c) => String.fromCharCode(c)).join(''))
+const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 
 export const api = {
-  async signup(email: string, password: string) {
-    email = email.trim().toLowerCase()
-    if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('That email looks glitched.')
-    if (password.length < 8) throw new Error('Password needs at least 8 characters.')
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${siteUrl()}/onboarding` } })
-    if (error) throw new Error(error.message)
-    // Supabase returns a user with no identities when the email is already registered.
-    if (data.user && data.user.identities?.length === 0) throw new Error('This email already lives in Nerdy Town. Try logging in.')
-    return { needsConfirmation: !data.session }
-  },
-
-  async login(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
-    if (error) {
-      if (/confirm/i.test(error.message)) throw Object.assign(new Error('Please confirm your email first — check your inbox.'), { code: 'unconfirmed' })
-      throw new Error('Wrong email or password. Even nerds typo.')
-    }
-    await applySession(data.session)
-    return { hasProfile: !!state.profiles[data.user.id] }
-  },
-
   /**
    * Sign in (or sign up) with a Solana wallet via Supabase's native Sign-In-With-Solana.
-   * The wallet signs a plain-text message — no transaction, no fees. The account is a normal
-   * Supabase user, so every database rule applies unchanged.
+   * Works for wallet apps and for Google / X / email logins (Reown creates a Solana wallet for
+   * those). The wallet signs a plain-text message — no transaction, no fees.
    */
   async walletSignIn(option: WalletOption): Promise<{ hasProfile: boolean } | { pending: ConnectedWallet }> {
     // Best path: connect + sign in one wallet approval.
     const oneStep = oneStepSignIn(option)
     if (oneStep) {
-      let who: { name: string; address: string } | null = null
       const adapter = {
         signIn: async (input: Record<string, unknown>) => {
           const out = await oneStep(input)
-          who = { name: out.name, address: out.address }
           return { signedMessage: out.signedMessage, signature: out.signature }
         },
       } as unknown as SolanaWallet
-      return finishWalletSignIn(adapter, () => who)
+      return finishWalletSignIn(adapter)
     }
     const wallet = await connectWallet(option)
     // Phones / WalletConnect: the signature trip must start from a new tap ("Sign in" button).
-    if (needsSecondTap(option)) return { pending: wallet }
+    // Social / email logins sign inside the page, so they go straight on.
+    if (needsSecondTap(option) && !wallet.embedded) return { pending: wallet }
     return api.walletSignInWith(wallet)
   },
 
@@ -482,24 +439,7 @@ export const api = {
       publicKey: { toBase58: () => wallet.address },
       signMessage: (message: Uint8Array) => wallet.signMessage(message),
     } as unknown as SolanaWallet
-    return finishWalletSignIn(adapter, () => wallet)
-  },
-
-  async resendConfirmation(email: string) {
-    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase(), options: { emailRedirectTo: `${siteUrl()}/onboarding` } })
-    if (error) throw new Error(error.message)
-  },
-
-  async sendPasswordReset(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: `${siteUrl()}/reset-password` })
-    if (error) throw new Error(error.message)
-  },
-
-  async updatePassword(password: string) {
-    if (password.length < 8) throw new Error('Password needs at least 8 characters.')
-    const { error } = await supabase.auth.updateUser({ password })
-    if (error) throw new Error(error.message)
-    set({ recovering: false })
+    return finishWalletSignIn(adapter)
   },
 
   async logout() {
@@ -547,7 +487,6 @@ export const api = {
     if (removed.length) await supabase.storage.from(PHOTO_BUCKET).remove(removed)
 
     await loadMine()
-    await linkPendingWallet()
     await loadPublic()
   },
 
@@ -574,15 +513,35 @@ export const api = {
     await loadMine()
   },
 
-  async connectWallet(option: WalletOption) {
-    const { address, name } = await connectWallet(option)
-    unwrap(await supabase.rpc('link_wallet', { p_address: address, p_provider: providerLabel(name) }))
+  /**
+   * Verification: lock $NERDY with the platform. The server builds the transfer (and pays the
+   * network fee), the sign-in wallet signs it, the server broadcasts it and checks it on-chain.
+   */
+  async verify(option: WalletOption) {
+    const mine = state.wallet
+    if (!state.session || !mine) throw new Error('This account has no Solana wallet.')
+    const wallet = await connectWallet(option, mine)
+    if (wallet.address !== mine) throw new Error(`Use the wallet you signed in with (${shortAddress(mine)}). That one is ${shortAddress(wallet.address)}.`)
+    const { tx } = await lockApi({ action: 'build' })
+    if (!tx) throw new Error('Could not prepare the transaction.')
+    let signed: Uint8Array
+    try {
+      signed = await wallet.signTransaction(fromBase64(tx))
+    } catch (e) {
+      throw new Error(/reject|cancel|denied|declin/i.test((e as Error).message) ? 'You cancelled in your wallet. Nothing was locked.' : (e as Error).message)
+    }
+    let res = await lockApi({ action: 'submit', signedTx: toBase64(signed) })
+    for (let i = 0; res.pending && res.signature && i < 4; i++) res = await lockApi({ action: 'confirm', signature: res.signature })
+    if (res.pending) throw new Error('Sent! The network is slow to confirm. Refresh in a minute to see your badge.')
     await loadMine()
+    await loadPublic()
   },
 
-  async disconnectWallet() {
-    unwrap(await supabase.rpc('unlink_wallet'))
-    set({ wallet: null })
+  /** Gives the locked $NERDY back (an admin sends it) and removes the verified badge. */
+  async unlock() {
+    unwrap(await supabase.rpc('unlock_verification'))
+    await loadMine()
+    await loadPublic()
   },
 
   async withdraw(amount: number) {
@@ -623,10 +582,9 @@ export const api = {
         await supabase
           .from('settings')
           .update({
-            phase: s.phase,
-            bonding_progress: s.bondingProgress,
             free_daily_requests: s.freeDailyRequests,
             real_user_goal: s.realUserGoal,
+            verify_lock_amount: s.verifyLockAmount,
             extra_request_cost: s.extraRequestCost,
             min_withdraw: s.minWithdraw,
             token_mint: s.tokenMint?.trim() || null,
@@ -643,7 +601,7 @@ export const api = {
       await loadRevenue()
     },
     async withdrawals() {
-      const res = await supabase.from('ledger').select('*').eq('kind', 'withdraw').order('created_at', { ascending: false }).limit(100)
+      const res = await supabase.from('ledger').select('*').in('kind', ['withdraw', 'unlock']).order('created_at', { ascending: false }).limit(100)
       return (unwrap(res) ?? []).map(mapLedger)
     },
     async approveWithdrawal(id: string) {

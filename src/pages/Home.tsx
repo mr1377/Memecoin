@@ -41,8 +41,8 @@ function Hero() {
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
   const tokenMint = useStore((s) => s.settings.tokenMint)
-  // Real residents first; NPCs fill the avatar stack until the town grows.
-  const faces = useMemo(() => Object.values(profiles).sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0)).slice(0, 5), [profiles])
+  // Verified residents first in the avatar stack.
+  const faces = useMemo(() => Object.values(profiles).sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0)).slice(0, 5), [profiles])
   const mxRaw = useMotionValue(0)
   const myRaw = useMotionValue(0)
   const mx = useSpring(mxRaw, { stiffness: 80, damping: 20 })
@@ -355,10 +355,10 @@ function WinWinDemo() {
 // ------------------------------------------------------------------ HOW IT WORKS
 
 function HowItWorks() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, extraRequestCost: EXTRA } = useStore((s) => s.settings)
   const steps = [
-    { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign up, add a photo (or generate your inner nerd), write a bio, pick your interests. Your socials stay locked.', color: 'from-grape to-byte' },
-    { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot. ${FREE_DAILY_REQUESTS} free requests every day — more with $NERDY in Phase 2.`, color: 'from-carrot to-rizz' },
+    { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign in with Google, X, email or a Solana wallet. Add a photo (or generate your inner nerd), a bio and your interests. Your socials stay locked.', color: 'from-grape to-byte' },
+    { icon: Send, title: 'Send partner requests', body: `Lock ${LOCK} $NERDY to get verified (you get it back any time), then shoot your shot. ${FREE_DAILY_REQUESTS} free requests a day, more for ${EXTRA} $NERDY each in Phase 2.`, color: 'from-carrot to-rizz' },
     { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get their socials. Rejected → you get popularity now, and a cut of the platform’s revenue in Phase 2.', color: 'from-lime to-byte' },
   ]
   return (
@@ -392,10 +392,9 @@ function HowItWorks() {
 // ------------------------------------------------------------------ ROADMAP
 
 function Roadmap() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, extraRequestCost: EXTRA_REQUEST_COST, realUserGoal: GOAL, phase2Reason } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, extraRequestCost: EXTRA_REQUEST_COST, realUserGoal: GOAL, verifyLockAmount: LOCK } = useStore((s) => s.settings)
   const phase = useStore((s) => s.phase)
-  const residents = useStore((s) => s.stats.residents)
-  const pct = useStore((s) => s.bondingProgress)
+  const verified = useStore((s) => s.stats.verified)
   const tokenMint = useStore((s) => s.settings.tokenMint)
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
@@ -405,14 +404,14 @@ function Roadmap() {
     {
       n: 1,
       title: 'Build the town',
-      sub: `While $NERDY bonds on Jupiter and the town grows to ${GOAL} nerds`,
-      points: [`${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant socials reveal', 'Rejections build public popularity', 'Leaderboard of legendary Ls'],
+      sub: `Until ${GOAL.toLocaleString()} verified nerds live here`,
+      points: [`Lock ${LOCK} $NERDY to get verified (unlock any time)`, `${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant socials reveal', 'Rejections build public popularity'],
       icon: Shield,
     },
     {
       n: 2,
       title: 'Revenue share',
-      sub: `After graduation or ${GOAL} real residents, whichever comes first`,
+      sub: `Starts by itself at ${GOAL.toLocaleString()} verified residents`,
       points: [`Buy extra daily requests (${EXTRA_REQUEST_COST} $NERDY each)`, 'All $NERDY spent in town goes into a monthly pool', 'The pool is split among rejected nerds every month: more Ls, bigger cut', 'Withdraw to your Solana wallet'],
       icon: Rocket,
     },
@@ -427,13 +426,15 @@ function Roadmap() {
 
       <motion.div {...reveal} className="card mx-auto mt-12 max-w-3xl p-6">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-mono text-white/60">Jupiter bonding curve</span>
-          <span className="font-mono font-bold text-carrot">{pct.toFixed(1)}%</span>
+          <span className="font-mono text-white/60">Verified residents</span>
+          <span className="font-mono font-bold text-lime">
+            {verified.toLocaleString()} / {GOAL.toLocaleString()}
+          </span>
         </div>
         <div className="relative mt-3 h-4 overflow-hidden rounded-full bg-white/5">
           <motion.div
             initial={{ width: 0 }}
-            whileInView={{ width: `${pct}%` }}
+            whileInView={{ width: `${Math.min(100, (verified / GOAL) * 100)}%` }}
             viewport={{ once: true }}
             transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
             className="relative h-full rounded-full bg-gradient-to-r from-grape via-carrot to-lime"
@@ -441,23 +442,8 @@ function Roadmap() {
             <div className="absolute inset-0 animate-shimmer bg-[linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)] bg-[length:200%_100%]" />
           </motion.div>
         </div>
-        <div className="mt-5 flex items-center justify-between text-sm">
-          <span className="font-mono text-white/60">Real residents</span>
-          <span className="font-mono font-bold text-lime">
-            {residents.toLocaleString()} / {GOAL.toLocaleString()}
-          </span>
-        </div>
-        <div className="relative mt-3 h-4 overflow-hidden rounded-full bg-white/5">
-          <motion.div
-            initial={{ width: 0 }}
-            whileInView={{ width: `${Math.min(100, (residents / GOAL) * 100)}%` }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
-            className="h-full rounded-full bg-gradient-to-r from-byte to-lime"
-          />
-        </div>
         <p className="mt-3 text-center text-xs text-white/40">
-          {phase === 1 ? 'Whichever bar fills first unlocks Phase 2 automatically.' : phase2Reason === 'residents' ? `🎉 ${GOAL} residents reached. Phase 2 is live.` : '🎓 $NERDY graduated. Phase 2 is live.'}
+          {phase === 1 ? `Phase 2 unlocks automatically at ${GOAL.toLocaleString()} verified residents.` : `🎉 ${GOAL.toLocaleString()} verified residents reached. Phase 2 is live.`}
         </p>
         {tokenMint && (
           <div className="mt-4 flex flex-col items-center gap-2">
@@ -523,7 +509,6 @@ function Roadmap() {
 
 function HallOfFame() {
   const profiles = useStore((s) => s.profiles)
-  // NPCs compete too, tagged as such. Counters are real (earned from actual requests).
   const top = useMemo(() => Object.values(profiles).filter((p) => p.rejectionsReceived > 0).sort((a, b) => b.rejectionsReceived - a.rejectionsReceived).slice(0, 5), [profiles])
   const max = top[0]?.rejectionsReceived || 1
   return (
@@ -553,7 +538,6 @@ function HallOfFame() {
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 font-semibold group-hover:text-carrot">
                     <span className="truncate">{p.name} {i === 0 && '👑'}</span>
-                    {p.isBot && <span className="shrink-0 rounded-full bg-grape/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-grape-300">NPC</span>}
                   </p>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
                     <motion.div initial={{ width: 0 }} whileInView={{ width: `${(p.rejectionsReceived / max) * 100}%` }} viewport={{ once: true }} transition={{ duration: 1.1, delay: i * 0.08 }} className="h-full rounded-full bg-gradient-to-r from-rizz to-carrot" />
@@ -572,14 +556,15 @@ function HallOfFame() {
 // ------------------------------------------------------------------ FAQ
 
 function FAQ() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK } = useStore((s) => s.settings)
   const qs = [
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
     ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. In Phase 2, every rejection from a real resident also earns you a share of that month’s revenue pool.'],
     ['How many requests can I send?', `${FREE_DAILY_REQUESTS} free requests per day, reset at midnight UTC. In Phase 2 you can buy more with $NERDY.`],
-    ['How does the revenue share work?', 'In Phase 2, every $NERDY spent in town (like buying extra requests) goes into that month’s pool. When the month ends, the pool is split among everyone who got rejected by real residents that month, in proportion to their rejections. 3 rejections out of 100 = 3% of the pool. It lands in your balance on the 1st, ready to withdraw.'],
-    ['When does Phase 2 start?', `When $NERDY graduates on Jupiter or when ${GOAL} real residents have joined, whichever happens first. NPCs don’t count toward the goal.`],
-    ['What is graduation?', '$NERDY launches on Jupiter (jup.ag) with a bonding curve. When the curve fills, the token “graduates” into an open liquidity pool and trades everywhere on Solana. It’s one of the two triggers for Phase 2.'],
+    ['How does the revenue share work?', 'In Phase 2, every $NERDY spent in town (like buying extra requests) goes into that month’s pool. When the month ends, the pool is split among everyone who got rejected that month, in proportion to their rejections. 3 rejections out of 100 = 3% of the pool. It lands in your balance on the 1st, ready to withdraw.'],
+    ['When does Phase 2 start?', `Automatically, the moment ${GOAL.toLocaleString()} verified residents live in Nerdy Town. Nobody can flip it early.`],
+    ['Why lock $NERDY to get verified?', `It keeps bots and fake accounts out: sending, accepting and rejecting requests needs ${LOCK} $NERDY locked with Nerdy Town. It’s not a fee. Unlock any time and it goes back to your wallet (the badge goes with it).`],
+    ['How do I sign up?', 'Tap “Continue with Google, X or email”, or use a Solana wallet like Phantom, Solflare or Trust. Social logins get a free Solana wallet of their own, so everyone can verify and get paid.'],
     ['Can I farm rejections?', 'You can only request each person once, and requests are capped daily. Shooting your shot is the only strategy.'],
   ]
   const [open, setOpen] = useState(0)

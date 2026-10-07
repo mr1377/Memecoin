@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, Check, Clock, Coins, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LogOut, Minus, PencilLine, Plus, Rocket, Send, Swords, Trash2, Unplug, Wallet as WalletIcon, X } from 'lucide-react'
+import { ArrowUpRight, BadgeCheck, Check, Clock, Coins, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LockOpen, LogOut, Minus, PencilLine, Plus, Rocket, Send, ShieldCheck, Swords, Trash2, Wallet as WalletIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AnimatedNumber from '../components/AnimatedNumber'
@@ -13,7 +13,7 @@ import { displayHandle, socialUrl } from '../lib/socials'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
 import { api, dailyInfo, selectMe, useStore } from '../lib/store'
-import type { WalletOption } from '../lib/wallets'
+import { shortAddress, type WalletOption } from '../lib/wallets'
 import WalletPicker from '../components/WalletPicker'
 import type { PartnerRequest, Profile } from '../lib/types'
 
@@ -123,7 +123,7 @@ function RevenueShare() {
             Your <b className="text-white">{rev.mine}</b> of {rev.rejections} rejection{rev.rejections === 1 ? '' : 's'} this month → about <b className="text-carrot">{share.toLocaleString()} $NERDY</b>
           </>
         ) : (
-          'Get rejected by real residents this month to claim a slice.'
+          'Get rejected this month to claim a slice.'
         )}
       </p>
       {rev.last && rev.last.paid > 0 && (
@@ -135,6 +135,64 @@ function RevenueShare() {
   )
 }
 
+/** Verification = $NERDY locked with the platform. Needed to send, accept and reject requests. */
+function VerifyCard({ onVerify, onUnlock }: { onVerify: () => void; onUnlock: () => void }) {
+  const me = useStore(selectMe)
+  const locked = useStore((s) => s.locked)
+  const ledger = useStore((s) => s.ledger)
+  const { verifyLockAmount: LOCK, tokenMint } = useStore((s) => s.settings)
+  const wallet = useStore((s) => s.wallet)
+  const returning = ledger.find((e) => e.kind === 'unlock' && (e.status === 'requested' || e.status === 'processing'))
+  if (me?.verified)
+    return (
+      <section className="card border-lime/30 bg-lime/[0.06] p-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-lime/20 text-lime">
+            <BadgeCheck className="h-6 w-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">You’re verified</p>
+            <p className="text-sm text-white/60">{locked > 0 ? `${locked.toLocaleString()} $NERDY locked` : 'Verified by the town hall'}</p>
+          </div>
+          {locked > 0 && (
+            <button onClick={onUnlock} className="chip shrink-0 py-2 text-white/60 hover:text-white">
+              <LockOpen className="h-3.5 w-3.5" /> Unlock
+            </button>
+          )}
+        </div>
+      </section>
+    )
+  return (
+    <section className="relative overflow-hidden rounded-3xl border-2 border-ink-950 bg-gradient-to-br from-lime via-byte to-grape p-[2px] shadow-pop-lg">
+      <div className="rounded-[1.4rem] bg-ink-900/95 p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-lime/15 text-lime">
+            <ShieldCheck className="h-6 w-6" />
+          </span>
+          <div>
+            <h2 className="text-xl font-bold">Get verified</h2>
+            <p className="text-sm text-white/60">Needed to send, accept and reject requests.</p>
+          </div>
+        </div>
+        <ul className="mt-4 space-y-1.5 text-sm text-white/70">
+          <li className="flex gap-2"><Lock className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Lock {LOCK} $NERDY with Nerdy Town</li>
+          <li className="flex gap-2"><LockOpen className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Unlock any time and get it back</li>
+          <li className="flex gap-2"><Coins className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> No SOL needed. We pay the network fee</li>
+        </ul>
+        {returning ? (
+          <p className="mt-4 rounded-2xl bg-white/5 p-3 text-sm text-white/70">
+            <Clock className="mr-1 inline h-4 w-4 text-byte" /> {Math.abs(returning.amount).toLocaleString()} $NERDY is on its way back to your wallet. You can lock again any time.
+          </p>
+        ) : null}
+        <button onClick={onVerify} disabled={!tokenMint || !wallet} className="btn-primary mt-5 w-full">
+          <ShieldCheck className="h-5 w-5" /> {tokenMint ? `Verify · lock ${LOCK} $NERDY` : 'Opens when $NERDY launches'}
+        </button>
+        {!wallet && <p className="mt-2 text-center text-xs text-rizz">This account has no Solana wallet. Log in with a wallet or Google / X / email.</p>}
+      </div>
+    </section>
+  )
+}
+
 export default function Dashboard() {
   const s = useStore((x) => x)
   const me = useStore(selectMe)!
@@ -143,7 +201,8 @@ export default function Dashboard() {
   const countdown = useResetCountdown()
   const [tab, setTab] = useState<Tab>('incoming')
   const [buyN, setBuyN] = useState(1)
-  const [walletOpen, setWalletOpen] = useState(false)
+  const [verifyOpen, setVerifyOpen] = useState(false)
+  const [unlockOpen, setUnlockOpen] = useState(false)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [busy, setBusy] = useState<string | false>(false)
@@ -154,7 +213,7 @@ export default function Dashboard() {
 
   const daily = dailyInfo(s)
   const { balance, wallet, ledger } = s
-  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, realUserGoal: GOAL, phase2Reason } = s.settings
+  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, realUserGoal: GOAL, verifyLockAmount: LOCK } = s.settings
 
   const { incoming, sent, matches, ls, pendingSent } = useMemo(() => {
     const mine = s.requests.filter((r) => r.from === me.id || r.to === me.id)
@@ -200,14 +259,28 @@ export default function Dashboard() {
     }
   }
 
-  const connect = async (o: WalletOption) => {
+  const verify = async (o: WalletOption) => {
     setBusy(o.id)
     try {
-      await api.connectWallet(o)
-      setWalletOpen(false)
-      toast('success', `${o.name} connected`)
+      await api.verify(o)
+      setVerifyOpen(false)
+      confetti({ count: 120, colors: ['#b6ff3b', '#38bdf8', '#fff'], emoji: ['✅', '🤓'] })
+      toast('win', 'You’re verified!', 'Go shoot your shot.')
     } catch (e) {
       if (!(e as { quiet?: boolean }).quiet) toast('error', (e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const unlock = async () => {
+    setBusy('unlock')
+    try {
+      await api.unlock()
+      setUnlockOpen(false)
+      toast('info', 'Unlocked', 'Your $NERDY is on its way back to your wallet.')
+    } catch (e) {
+      toast('error', (e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -275,17 +348,11 @@ export default function Dashboard() {
             {s.phase === 1 ? <Lock className="h-5 w-5" /> : <GraduationCap className="h-5 w-5" />}
           </span>
           <div>
-            <p className="font-semibold">
-              {s.phase === 1
-                ? `Phase 1 · ${Math.min(s.stats.residents, GOAL)}/${GOAL} residents · ${s.bondingProgress.toFixed(0)}% bonded`
-                : phase2Reason === 'residents'
-                  ? `Phase 2 · ${GOAL} residents reached 🎉`
-                  : 'Phase 2 · $NERDY has graduated 🎓'}
-            </p>
+            <p className="font-semibold">{s.phase === 1 ? `Phase 1 · ${Math.min(s.stats.verified, GOAL).toLocaleString()} / ${GOAL.toLocaleString()} verified residents` : `Phase 2 · ${GOAL.toLocaleString()} verified residents reached 🎉`}</p>
             <p className="text-sm text-white/60">
               {s.phase === 1
-                ? `Phase 2 starts when $NERDY graduates or ${GOAL} real nerds join, whichever comes first. Until then, rejections count as popularity.`
-                : 'Every rejection from a real resident earns you a share of the monthly revenue pool.'}
+                ? `Phase 2 starts by itself when ${GOAL.toLocaleString()} verified nerds live here. Until then, rejections count as popularity.`
+                : 'Every rejection earns you a share of the monthly revenue pool.'}
             </p>
           </div>
         </div>
@@ -317,6 +384,11 @@ export default function Dashboard() {
             ))}
           </div>
 
+          {tab === 'incoming' && !me.verified && incoming.length > 0 && (
+            <button onClick={() => setVerifyOpen(true)} className="mt-4 flex w-full items-center gap-2 rounded-2xl border border-lime/30 bg-lime/10 p-3 text-left text-sm text-white/80 hover:bg-lime/15">
+              <ShieldCheck className="h-5 w-5 shrink-0 text-lime" /> Get verified to answer these. Lock {LOCK} $NERDY, get it back any time.
+            </button>
+          )}
           <div className="mt-4 min-h-[260px]">
             <AnimatePresence mode="popLayout" initial={false}>
               {list.length === 0 ? (
@@ -344,14 +416,10 @@ export default function Dashboard() {
                         </Link>
                         {tab === 'matches' ? (
                           outgoing ? (
-                            o.isBot ? (
-                              <p className="text-xs text-white/50">NPC — no socials to reveal</p>
-                            ) : (
-                              <p className="truncate text-sm text-lime">
-                                <Scramble text={socialsOf(o.id)[0] ? displayHandle(socialsOf(o.id)[0]) : '…'} className="font-mono" />
-                                {socialsOf(o.id).length > 1 && <span className="text-xs text-white/40"> +{socialsOf(o.id).length - 1} more</span>}
-                              </p>
-                            )
+                            <p className="truncate text-sm text-lime">
+                              <Scramble text={socialsOf(o.id)[0] ? displayHandle(socialsOf(o.id)[0]) : '…'} className="font-mono" />
+                              {socialsOf(o.id).length > 1 && <span className="text-xs text-white/40"> +{socialsOf(o.id).length - 1} more</span>}
+                            </p>
                           ) : (
                             <p className="text-xs text-white/50">You accepted — they can see your socials</p>
                           )
@@ -418,6 +486,7 @@ export default function Dashboard() {
 
         {/* side column */}
         <div className="order-1 space-y-6 lg:order-2">
+          <VerifyCard onVerify={() => setVerifyOpen(true)} onUnlock={() => setUnlockOpen(true)} />
           {/* daily */}
           <section className="card p-5 sm:p-6">
             <div className="flex items-center gap-5">
@@ -471,27 +540,20 @@ export default function Dashboard() {
 
               {s.phase === 2 && <RevenueShare />}
 
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                {wallet ? (
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-grape/20 text-grape-300">
-                      <WalletIcon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-white/50">{wallet.provider === 'Other' ? 'Solana wallet' : wallet.provider}</p>
-                      <p className="truncate font-mono text-sm">
-                        {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}
-                      </p>
-                    </div>
-                    <button onClick={() => api.disconnectWallet()} className="rounded-xl p-2 text-white/50 hover:bg-white/10 hover:text-white" aria-label="Disconnect wallet">
-                      <Unplug className="h-4 w-4" />
+              <div className="mt-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-grape/20 text-grape-300">
+                  <WalletIcon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white/50">Your sign-in wallet · payouts go here</p>
+                  {wallet ? (
+                    <button onClick={() => navigator.clipboard?.writeText(wallet).then(() => toast('success', 'Wallet address copied', wallet))} title="Copy full address" className="block max-w-full truncate font-mono text-sm hover:text-carrot">
+                      {wallet.slice(0, 6)}…{wallet.slice(-6)}
                     </button>
-                  </div>
-                ) : (
-                  <button onClick={() => setWalletOpen(true)} className="flex w-full items-center justify-center gap-2 py-1.5 text-sm font-semibold text-white/80 hover:text-white">
-                    <WalletIcon className="h-4 w-4" /> Connect Solana wallet
-                  </button>
-                )}
+                  ) : (
+                    <p className="font-mono text-sm">No wallet on this account</p>
+                  )}
+                </div>
               </div>
               <button onClick={() => setWithdrawOpen(true)} disabled={s.phase === 1 || !wallet} className="btn-primary mt-3 w-full">
                 <ArrowUpRight className="h-4 w-4" /> Withdraw
@@ -505,7 +567,7 @@ export default function Dashboard() {
                       <li key={e.id} className="flex items-center justify-between gap-2 text-sm">
                         <span className="min-w-0 truncate text-white/70">
                           {e.note}
-                          {e.kind === 'withdraw' && (
+                          {(e.kind === 'withdraw' || e.kind === 'unlock') && (
                             <span className={clsx('ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase', e.status === 'sent' ? 'bg-lime/15 text-lime' : e.status === 'failed' || e.status === 'rejected' ? 'bg-rizz/15 text-rizz' : 'bg-byte/15 text-byte')}>
                               {e.txSig ? (
                                 <a href={`https://solscan.io/tx/${e.txSig}`} target="_blank" rel="noopener noreferrer" className="underline">{e.status}</a>
@@ -529,14 +591,31 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* wallet modal */}
-      <Modal open={walletOpen} onClose={() => setWalletOpen(false)} title="Connect wallet">
-        <h2 className="text-2xl font-bold">Connect a wallet</h2>
-        <p className="mt-1 text-sm text-white/60">Withdraw $NERDY straight to Solana.</p>
+      {/* verify modal */}
+      <Modal open={verifyOpen} onClose={() => setVerifyOpen(false)} title="Get verified">
+        <h2 className="text-2xl font-bold">Lock {LOCK} $NERDY</h2>
+        <p className="mt-1 text-sm text-white/60">
+          Pick the login you used to sign in{wallet ? <> (<span className="font-mono">{shortAddress(wallet)}</span>)</> : null}. It asks you to approve sending {LOCK} $NERDY to Nerdy Town. We pay the network fee.
+        </p>
         <div className="mt-6">
-          <WalletPicker onPick={connect} busyId={typeof busy === 'string' ? busy : null} disabled={!!busy} />
+          <WalletPicker onPick={verify} busyId={typeof busy === 'string' ? busy : null} disabled={!!busy} />
         </div>
-        <p className="mt-4 text-center text-xs text-white/40">On mobile, this opens the site inside your wallet app. We only store your public address.</p>
+        <p className="mt-4 text-center text-xs text-white/40">Unlock whenever you like: your {LOCK} $NERDY is sent back to this wallet and the badge goes away.</p>
+      </Modal>
+
+      {/* unlock modal */}
+      <Modal open={unlockOpen} onClose={() => setUnlockOpen(false)} title="Unlock">
+        <div className="text-center">
+          <LockOpen className="mx-auto h-10 w-10 text-carrot" />
+          <h2 className="mt-3 text-2xl font-bold">Unlock {s.locked.toLocaleString()} $NERDY?</h2>
+          <p className="mt-2 text-white/60">It’s sent back to {wallet ? <span className="font-mono">{shortAddress(wallet)}</span> : 'your wallet'} after a quick review (usually within 24h). You lose the verified badge right away, so you can’t send or answer requests until you lock again.</p>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button onClick={() => setUnlockOpen(false)} className="btn-ghost">Keep it locked</button>
+            <button onClick={unlock} disabled={busy === 'unlock'} className="btn-primary">
+              {busy === 'unlock' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockOpen className="h-4 w-4" />} Unlock
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* withdraw modal */}
@@ -547,7 +626,7 @@ export default function Dashboard() {
           <input className="input pr-20 font-mono text-xl" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} placeholder="0" aria-label="Amount" />
           <button onClick={() => setAmount(String(balance))} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-carrot/15 px-3 py-1.5 text-xs font-bold text-carrot">MAX</button>
         </div>
-        {wallet && <p className="mt-3 text-xs text-white/50">To {wallet.provider === 'Other' ? 'your wallet' : wallet.provider} · {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}</p>}
+        {wallet && <p className="mt-3 text-xs text-white/50">To your sign-in wallet · {wallet.slice(0, 6)}…{wallet.slice(-6)}</p>}
         <button onClick={withdraw} disabled={busy === 'withdraw' || !amount} className="btn-primary mt-6 w-full py-4">
           {busy === 'withdraw' ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUpRight className="h-5 w-5" />} Request withdrawal
         </button>

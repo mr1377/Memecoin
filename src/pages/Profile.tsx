@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeft, BadgeCheck, Ban, Calendar, Check, Flag, Flame, Gamepad2, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, Sparkles, Swords, X } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Ban, Calendar, Check, Flag, Flame, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, ShieldCheck, Sparkles, Swords, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
@@ -187,6 +187,13 @@ export default function ProfilePage() {
         Finish your profile to send requests
       </Link>
     )
+  } else if (!me.verified && (!rel || (rel.to === me.id && rel.status === 'pending'))) {
+    action = (
+      <Link to="/dashboard" className="btn-primary w-full py-4 text-base">
+        <ShieldCheck className="h-5 w-5" /> Get verified to {rel ? 'answer' : 'send a request'}
+        <span className="ml-1 rounded-full bg-ink-950/15 px-2 py-0.5 font-mono text-xs">lock {s.settings.verifyLockAmount} $NERDY</span>
+      </Link>
+    )
   } else if (rel && rel.to === me.id && rel.status === 'pending') {
     action = (
       <div className="grid grid-cols-2 gap-3">
@@ -241,7 +248,7 @@ export default function ProfilePage() {
           <button onClick={share} className="rounded-full border border-white/10 bg-white/5 p-2.5 hover:bg-white/10" aria-label="Share profile">
             <Share2 className="h-4 w-4" />
           </button>
-          {s.session && !isMe && !profile.isBot && (
+          {s.session && !isMe && (
             <button onClick={() => setMenu('menu')} className="rounded-full border border-white/10 bg-white/5 p-2.5 hover:bg-white/10" aria-label="Report or block">
               <MoreHorizontal className="h-4 w-4" />
             </button>
@@ -260,13 +267,8 @@ export default function ProfilePage() {
               <span className="chip border-carrot/40 bg-carrot/10 text-carrot">
                 <Sparkles className="h-3.5 w-3.5" /> {profile.nerdClass}
               </span>
-              {profile.isBot && (
-                <span className="chip border-grape/40 bg-grape/10 text-grape-300" title="Built-in resident run by Nerdy Town">
-                  <Gamepad2 className="h-3.5 w-3.5" /> NPC
-                </span>
-              )}
               {profile.verified && (
-                <span className="chip border-byte/40 bg-byte/10 text-byte">
+                <span className="chip border-byte/40 bg-byte/10 text-byte" title={`Has ${s.settings.verifyLockAmount} $NERDY locked`}>
                   <BadgeCheck className="h-3.5 w-3.5" /> Verified nerd
                 </span>
               )}
@@ -319,10 +321,6 @@ export default function ProfilePage() {
             <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-white/50">Socials</h2>
             {isMe ? (
               <SocialsReveal socials={s.myContacts} label="Your socials (private)" />
-            ) : profile.isBot ? (
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
-                <Gamepad2 className="h-5 w-5 shrink-0 text-grape-300" /> NPC — a built-in Nerdy Town resident. No socials to reveal, but it answers requests so the town never sleeps.
-              </div>
             ) : socials ? (
               <SocialsReveal socials={socials} />
             ) : (
@@ -339,7 +337,7 @@ export default function ProfilePage() {
         <div className="text-center">
           <ProfilePhoto profile={profile} className="mx-auto h-24 w-24 rounded-3xl" />
           <h2 className="mt-4 text-2xl font-bold">Shoot your shot with {profile.name.split(' ')[0]}?</h2>
-          <p className="mt-2 text-white/60">If they accept, you get their socials. If they reject, you get popularity{s.phase === 2 ? ' and $NERDY' : ''}. You literally can’t lose.</p>
+          <p className="mt-2 text-white/60">If they accept, you get their socials. If they reject, you get popularity{s.phase === 2 ? ' and a share of the monthly $NERDY pool' : ''}. You literally can’t lose.</p>
           {daily && (
             <p className="mt-4 font-mono text-sm text-white/50">
               Uses 1 of your <b className="text-carrot">{daily.left}</b> remaining request{daily.left === 1 ? '' : 's'} today
