@@ -17,8 +17,12 @@ create table public.settings (
   free_daily_requests int not null default 3 check (free_daily_requests between 0 and 50),
   extra_request_cost int not null default 1 check (extra_request_cost > 0),
   min_withdraw int not null default 500 check (min_withdraw > 0),
-  -- Verification: lock this many $NERDY with the platform.
-  verify_lock_amount int not null default 100 check (verify_lock_amount > 0),
+  -- Verification: lock this many $NERDY with the platform. Only verified residents earn $NERDY.
+  verify_lock_amount int not null default 2000 check (verify_lock_amount > 0),
+  -- Phase 1: $NERDY a verified resident earns per rejection (Phase 2 uses the monthly revenue share).
+  reject_reward int not null default 20 check (reject_reward >= 0),
+  -- Withdrawals open this many days after getting verified.
+  withdraw_wait_days int not null default 14 check (withdraw_wait_days between 0 and 365),
   -- Phase 2 starts by itself once this many VERIFIED residents exist. It never goes back.
   real_user_goal int not null default 1000 check (real_user_goal between 1 and 1000000),
   phase2_at timestamptz,
@@ -73,6 +77,7 @@ create table public.profiles (
   photos text[] not null default '{}' check (cardinality(photos) <= 4),
   avatar jsonb not null check (jsonb_typeof(avatar) = 'object'),
   verified boolean not null default false,
+  verified_at timestamptz,
   rejections_given int not null default 0,
   rejections_received int not null default 0,
   accepts int not null default 0,
@@ -81,7 +86,7 @@ create table public.profiles (
 create index profiles_rejections_idx on public.profiles (rejections_received desc);
 create index profiles_created_idx on public.profiles (created_at desc);
 
--- Users may edit their own profile, but never counters / verified flag,
+-- Users may edit their own profile, but never counters / verification,
 -- and photos must live in their own storage folder.
 create or replace function public.protect_profile() returns trigger
 language plpgsql as $$
@@ -90,6 +95,7 @@ begin
   if coalesce(current_setting('nerdy.internal', true), '') <> 'on' then
     if tg_op = 'INSERT' then
       new.verified := false;
+      new.verified_at := null;
       new.rejections_given := 0;
       new.rejections_received := 0;
       new.accepts := 0;
@@ -97,6 +103,7 @@ begin
     else
       new.id := old.id;
       new.verified := old.verified;
+      new.verified_at := old.verified_at;
       new.rejections_given := old.rejections_given;
       new.rejections_received := old.rejections_received;
       new.accepts := old.accepts;
@@ -180,6 +187,8 @@ create table public.requests (
   seen boolean not null default false,
   created_at timestamptz not null default now(),
   resolved_at timestamptz,
+  -- Rejected while the sender was verified: earns $NERDY (Phase 1 reward / Phase 2 revenue share).
+  earns boolean not null default false,
   check (from_id <> to_id)
 );
 -- One request per pair of people, in either direction, ever.
@@ -324,6 +333,8 @@ create or replace function public._resolve(p_request uuid, p_status text) return
 language plpgsql security definer set search_path = public as $$
 declare
   r public.requests;
+  s public.settings;
+  responder text;
 begin
   perform public._internal();
   update public.requests set status = p_status, resolved_at = now(), seen = false
@@ -338,21 +349,26 @@ begin
   else
     update public.profiles set rejections_received = rejections_received + 1 where id = r.from_id;
     update public.profiles set rejections_given = rejections_given + 1 where id = r.to_id;
+    -- Only verified residents earn from rejections.
+    if exists (select 1 from public.profiles where id = r.from_id and verified) then
+      update public.requests set earns = true where id = r.id returning * into r;
+      select * into s from public.settings where id = 1;
+      if s.phase = 1 and s.reject_reward > 0 then
+        select name into responder from public.profiles where id = r.to_id;
+        insert into public.ledger (user_id, kind, amount, note)
+        values (r.from_id, 'reject-reward', s.reject_reward, 'Rejected by ' || coalesce(responder, 'someone') || '. Still a W.');
+      end if;
+    end if;
   end if;
   return r;
 end $$;
 
--- Verification gate for sending and answering requests.
-create or replace function public._require_verified(me uuid) returns void
+-- Anyone with a profile can send and answer requests.
+create or replace function public._require_profile(me uuid) returns void
 language plpgsql stable security definer set search_path = public as $$
-declare p public.profiles;
 begin
   if me is null then raise exception 'Log in first.'; end if;
-  select * into p from public.profiles where id = me;
-  if p.id is null then raise exception 'Create your profile first.'; end if;
-  if not p.verified then
-    raise exception 'Get verified first: lock % $NERDY on your dashboard.', (select verify_lock_amount from public.settings where id = 1);
-  end if;
+  if not exists (select 1 from public.profiles where id = me) then raise exception 'Create your profile first.'; end if;
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -397,7 +413,7 @@ for each row execute function public._phase_on_verify();
 create or replace function public._month(t timestamptz) returns date
 language sql immutable as $$ select date_trunc('month', t at time zone 'utc')::date $$;
 
--- Rejections each resident received in a month (Phase 2 only).
+-- Rejections each resident received while verified in a month (Phase 2 only).
 create or replace function public._month_rejections(m date)
 returns table (user_id uuid, n int)
 language sql stable security definer set search_path = public as $$
@@ -405,6 +421,7 @@ language sql stable security definer set search_path = public as $$
   from public.requests r
   cross join public.settings s
   where r.status = 'rejected'
+    and r.earns
     and s.phase = 2
     and r.resolved_at >= greatest((m::timestamp at time zone 'utc'), s.phase2_at)
     and r.resolved_at < ((m + interval '1 month')::timestamp at time zone 'utc')
@@ -479,11 +496,13 @@ begin
     raise exception 'This transaction was already used.';
   end if;
   perform public._internal();
-  update public.profiles set verified = true where id = p_user;
+  update public.profiles set verified = true, verified_at = case when verified then coalesce(verified_at, now()) else now() end
+  where id = p_user;
 end $$;
 
 -- Gives the locked $NERDY back (sent to the wallet once an admin approves) and
--- removes the verified badge.
+-- removes the verified badge. Earned $NERDY stays in the app balance; it can be
+-- withdrawn again once re-verified for withdraw_wait_days.
 create or replace function public.unlock_verification() returns bigint
 language plpgsql security definer set search_path = public as $$
 declare me uuid := auth.uid(); total bigint; w text;
@@ -494,7 +513,7 @@ begin
   if total = 0 then raise exception 'You have nothing locked.'; end if;
   update public.locks set status = 'unlocked', unlocked_at = now() where user_id = me and status = 'locked';
   perform public._internal();
-  update public.profiles set verified = false where id = me;
+  update public.profiles set verified = false, verified_at = null where id = me;
   insert into public.ledger (user_id, kind, amount, note)
   values (me, 'lock-return', total, 'Unlocked ' || total || ' $NERDY');
   insert into public.ledger (user_id, kind, amount, note, status, wallet)
@@ -520,7 +539,7 @@ declare
   existing public.requests;
   r public.requests;
 begin
-  perform public._require_verified(me);
+  perform public._require_profile(me);
   if p_to = me then raise exception 'Self-love is valid, but not like this.'; end if;
   select * into target from public.profiles where id = p_to;
   if target.id is null or public.is_blocked_with(p_to) then
@@ -552,7 +571,7 @@ create or replace function public.respond_request(p_request uuid, p_accept boole
 language plpgsql security definer set search_path = public as $$
 declare r public.requests;
 begin
-  perform public._require_verified(auth.uid());
+  perform public._require_profile(auth.uid());
   select * into r from public.requests where id = p_request for update;
   if r.id is null or r.to_id <> auth.uid() then raise exception 'Request not found.'; end if;
   return public._resolve(p_request, case when p_accept then 'accepted' else 'rejected' end);
@@ -590,11 +609,16 @@ end $$;
 
 create or replace function public.request_withdrawal(p_amount bigint) returns public.ledger
 language plpgsql security definer set search_path = public as $$
-declare me uuid := auth.uid(); s public.settings; w text; l public.ledger;
+declare me uuid := auth.uid(); s public.settings; p public.profiles; w text; l public.ledger;
 begin
   if me is null then raise exception 'Log in first.'; end if;
   select * into s from public.settings where id = 1;
-  if s.phase <> 2 then raise exception 'Withdrawals open in Phase 2.'; end if;
+  select * into p from public.profiles where id = me;
+  if p.id is null or not p.verified then raise exception 'Get verified to withdraw.'; end if;
+  if p.verified_at > now() - make_interval(days => s.withdraw_wait_days) then
+    raise exception 'Withdrawals open % days after you get verified (%).', s.withdraw_wait_days,
+      to_char((p.verified_at + make_interval(days => s.withdraw_wait_days)) at time zone 'utc', 'FMMonth FMDD, YYYY');
+  end if;
   w := public._wallet(me);
   if w is null then raise exception 'This account has no Solana wallet.'; end if;
   if p_amount is null or p_amount < s.min_withdraw then raise exception 'Minimum withdrawal is % $NERDY.', s.min_withdraw; end if;
@@ -672,7 +696,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_admin() then raise exception 'Admins only.'; end if;
   perform public._internal();
-  update public.profiles set verified = p_verified where id = p_user;
+  update public.profiles set verified = p_verified, verified_at = case when p_verified then coalesce(verified_at, now()) end where id = p_user;
 end $$;
 
 create or replace function public.admin_reject_withdrawal(p_id uuid) returns void
@@ -697,7 +721,7 @@ revoke execute on function public._internal() from public, anon, authenticated;
 revoke execute on function public._resolve(uuid, text) from public, anon, authenticated;
 revoke execute on function public._balance(uuid) from public, anon, authenticated;
 revoke execute on function public._wallet(uuid) from public, anon, authenticated;
-revoke execute on function public._require_verified(uuid) from public, anon, authenticated;
+revoke execute on function public._require_profile(uuid) from public, anon, authenticated;
 revoke execute on function public._settings_phase() from public, anon, authenticated;
 revoke execute on function public._phase_on_verify() from public, anon, authenticated;
 revoke execute on function public._month_rejections(date) from public, anon, authenticated;

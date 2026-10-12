@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeft, BadgeCheck, Ban, Calendar, Check, Flag, Flame, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, ShieldCheck, Sparkles, Swords, X } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Ban, Calendar, Check, Flag, Flame, HeartHandshake, Loader2, MapPin, MoreHorizontal, PencilLine, Send, Share2, Sparkles, Swords, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Page } from '../components/Layout'
@@ -187,13 +187,6 @@ export default function ProfilePage() {
         Finish your profile to send requests
       </Link>
     )
-  } else if (!me.verified && (!rel || (rel.to === me.id && rel.status === 'pending'))) {
-    action = (
-      <Link to="/dashboard" className="btn-primary w-full py-4 text-base">
-        <ShieldCheck className="h-5 w-5" /> Get verified to {rel ? 'answer' : 'send a request'}
-        <span className="ml-1 rounded-full bg-ink-950/15 px-2 py-0.5 font-mono text-xs">lock {s.settings.verifyLockAmount} $NERDY</span>
-      </Link>
-    )
   } else if (rel && rel.to === me.id && rel.status === 'pending') {
     action = (
       <div className="grid grid-cols-2 gap-3">
@@ -337,7 +330,7 @@ export default function ProfilePage() {
         <div className="text-center">
           <ProfilePhoto profile={profile} className="mx-auto h-24 w-24 rounded-3xl" />
           <h2 className="mt-4 text-2xl font-bold">Shoot your shot with {profile.name.split(' ')[0]}?</h2>
-          <p className="mt-2 text-white/60">If they accept, you get their socials. If they reject, you get popularity{s.phase === 2 ? ' and a share of the monthly $NERDY pool' : ''}. You literally can’t lose.</p>
+          <p className="mt-2 text-white/60">If they accept, you get their socials. If they reject, you get popularity{me?.verified ? (s.phase === 1 ? ` and ${s.settings.rejectReward} $NERDY` : ' and a share of the monthly $NERDY pool') : ''}. You literally can’t lose.</p>
           {daily && (
             <p className="mt-4 font-mono text-sm text-white/50">
               Uses 1 of your <b className="text-carrot">{daily.left}</b> remaining request{daily.left === 1 ? '' : 's'} today

@@ -24,7 +24,9 @@ interface Props {
 export default function OutcomeModal({ open, onClose, status, other, me, phase }: Props) {
   const pool = useStore((s) => s.revenue?.pool ?? 0)
   const socials = useStore((s) => s.contacts[other.id])
-  const paid = phase === 2
+  const reward = useStore((s) => s.settings.rejectReward)
+  // Only verified residents earn: Phase 1 a fixed reward, Phase 2 a share of the monthly pool.
+  const paid = !!me.verified
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => {
@@ -82,9 +84,15 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
               </div>
               <div className={`rounded-2xl border p-4 ${paid ? 'border-carrot/30 bg-carrot/10' : 'border-white/10 bg-white/5'}`}>
                 <Coins className={`mx-auto h-5 w-5 ${paid ? 'text-carrot' : 'text-white/30'}`} />
-                <p className="mt-1 font-display text-3xl font-extrabold">{paid ? '+1' : '🔒'}</p>
+                <p className="mt-1 font-display text-3xl font-extrabold">{paid ? (phase === 1 ? `+${reward}` : '+1') : '🔒'}</p>
                 <p className="text-xs text-white/50">
-                  {paid ? `share of this month’s ${pool > 0 ? `${pool.toLocaleString()} $NERDY ` : ''}pool` : 'Revenue share starts in Phase 2'}
+                  {paid
+                    ? phase === 1
+                      ? '$NERDY earned'
+                      : `share of this month’s ${pool > 0 ? `${pool.toLocaleString()} $NERDY ` : ''}pool`
+                    : phase === 1
+                      ? `Get verified to earn ${reward} $NERDY per rejection`
+                      : 'Get verified to earn a share'}
                 </p>
               </div>
             </div>

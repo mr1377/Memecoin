@@ -1,8 +1,8 @@
 /**
  * POST /api/approve-withdrawal  { id }   (Authorization: Bearer <admin's Supabase access token>)
  *
- * Sends a requested $NERDY withdrawal (Phase 2) or a verification unlock (any phase) on-chain
- * from the treasury wallet.
+ * Sends a requested $NERDY withdrawal or a verification unlock on-chain from the treasury wallet.
+ * (Who may withdraw — verified for withdraw_wait_days — is enforced when the request is made.)
  * Runs on Vercel as a serverless function. Required environment variables:
  *   VITE_SUPABASE_URL           – same as the frontend
  *   SUPABASE_SERVICE_ROLE_KEY   – Supabase → Project settings → API (secret! server only)
@@ -51,10 +51,6 @@ export default async function handler(req: Req, res: Res) {
     .select('*')
     .maybeSingle()
   if (!row) return res.status(409).json({ error: 'Withdrawal not found or already handled.' })
-  if (row.kind === 'withdraw' && settings.phase !== 2) {
-    await db.from('ledger').update({ status: 'requested' }).eq('id', id)
-    return res.status(409).json({ error: 'Withdrawals only run in Phase 2.' })
-  }
 
   const fail = async (message: string, status = 500) => {
     // Nothing was broadcast: mark failed, which refunds the user's balance.

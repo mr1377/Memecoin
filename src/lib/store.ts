@@ -38,7 +38,9 @@ const DEFAULT_SETTINGS: Settings = {
   freeDailyRequests: 3,
   realUserGoal: 1000,
   phase2At: null,
-  verifyLockAmount: 100,
+  verifyLockAmount: 2000,
+  rejectReward: 20,
+  withdrawWaitDays: 14,
   extraRequestCost: 1,
   minWithdraw: 500,
   tokenMint: null,
@@ -110,6 +112,7 @@ function mapProfile(r: Row): Profile {
     rejectionsReceived: r.rejections_received as number,
     accepts: r.accepts as number,
     verified: r.verified as boolean,
+    verifiedAt: r.verified_at ? Date.parse(r.verified_at as string) : null,
   }
 }
 
@@ -140,7 +143,9 @@ const mapSettings = (r: Row): Settings => ({
   freeDailyRequests: r.free_daily_requests as number,
   realUserGoal: (r.real_user_goal as number) ?? 1000,
   phase2At: r.phase2_at ? Date.parse(r.phase2_at as string) : null,
-  verifyLockAmount: (r.verify_lock_amount as number) ?? 100,
+  verifyLockAmount: (r.verify_lock_amount as number) ?? 2000,
+  rejectReward: (r.reject_reward as number) ?? 20,
+  withdrawWaitDays: (r.withdraw_wait_days as number) ?? 14,
   extraRequestCost: r.extra_request_cost as number,
   minWithdraw: r.min_withdraw as number,
   tokenMint: (r.token_mint as string) || null,
@@ -340,6 +345,13 @@ export const selectMe = (s: State) => (s.session ? s.profiles[s.session] ?? null
 export function dailyInfo(s: State) {
   const limit = s.settings.freeDailyRequests + s.usage.bonus
   return { used: s.usage.used, limit, left: Math.max(0, limit - s.usage.used), bonus: s.usage.bonus }
+}
+
+/** When this resident can withdraw (verified + waiting period), or null if not verified. */
+export function withdrawOpensAt(s: State): number | null {
+  const me = selectMe(s)
+  if (!me?.verified || !me.verifiedAt) return null
+  return me.verifiedAt + s.settings.withdrawWaitDays * 86_400_000
 }
 
 export function relationWith(s: State, other: string) {
@@ -585,6 +597,8 @@ export const api = {
             free_daily_requests: s.freeDailyRequests,
             real_user_goal: s.realUserGoal,
             verify_lock_amount: s.verifyLockAmount,
+            reject_reward: s.rejectReward,
+            withdraw_wait_days: s.withdrawWaitDays,
             extra_request_cost: s.extraRequestCost,
             min_withdraw: s.minWithdraw,
             token_mint: s.tokenMint?.trim() || null,

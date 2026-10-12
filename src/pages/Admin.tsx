@@ -129,6 +129,8 @@ export default function Admin() {
             hint={`${verifiedCount.toLocaleString()} verified of ${residentsCount.toLocaleString()} residents now.`}
           />
           <NumField label="Verification lock ($NERDY)" value={form.verifyLockAmount} onChange={(v) => setForm({ ...form, verifyLockAmount: Math.max(1, Math.round(v)) })} hint="Applies to new locks. Existing verified residents keep their badge." />
+          <NumField label="$NERDY per rejection (Phase 1)" value={form.rejectReward} onChange={(v) => setForm({ ...form, rejectReward: Math.max(0, Math.round(v)) })} hint="Paid to verified residents only. Phase 2 uses the monthly revenue share instead." />
+          <NumField label="Days before withdrawing" value={form.withdrawWaitDays} onChange={(v) => setForm({ ...form, withdrawWaitDays: Math.max(0, Math.min(365, Math.round(v))) })} hint="Counted from when a resident got verified." />
           <NumField label="Extra request price ($NERDY)" value={form.extraRequestCost} onChange={(v) => setForm({ ...form, extraRequestCost: v })} />
           <NumField label="Minimum withdrawal ($NERDY)" value={form.minWithdraw} onChange={(v) => setForm({ ...form, minWithdraw: v })} />
           <label className="block sm:col-span-2">
@@ -144,7 +146,7 @@ export default function Admin() {
 
       <Section title="Revenue share" icon={Coins}>
         {settings.phase === 1 ? (
-          <p className="text-sm text-white/60">Starts in Phase 2. Every $NERDY spent on extra requests goes into the month’s pool; after the month ends it’s split among everyone who got rejected that month, in proportion to their rejections.</p>
+          <p className="text-sm text-white/60">Starts in Phase 2. Every $NERDY spent on extra requests goes into the month’s pool; after the month ends it’s split among verified residents who got rejected that month, in proportion to their rejections.</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-3 text-center">

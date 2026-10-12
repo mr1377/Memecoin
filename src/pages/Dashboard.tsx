@@ -12,7 +12,7 @@ import { Scramble, SocialIcon } from '../components/SocialsReveal'
 import { displayHandle, socialUrl } from '../lib/socials'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
-import { api, dailyInfo, selectMe, useStore } from '../lib/store'
+import { api, dailyInfo, selectMe, useStore, withdrawOpensAt } from '../lib/store'
 import { shortAddress, type WalletOption } from '../lib/wallets'
 import WalletPicker from '../components/WalletPicker'
 import type { PartnerRequest, Profile } from '../lib/types'
@@ -99,6 +99,7 @@ const monthName = (ymd: string, opts: Intl.DateTimeFormatOptions = { month: 'lon
 /** This month's revenue pool and the share my rejections earn so far. */
 function RevenueShare() {
   const rev = useStore((s) => s.revenue)
+  const me = useStore(selectMe)
   if (!rev) return null
   const share = rev.rejections > 0 ? Math.floor((rev.pool * rev.mine) / rev.rejections) : 0
   const pct = rev.rejections > 0 ? (rev.mine / rev.rejections) * 100 : 0
@@ -123,7 +124,7 @@ function RevenueShare() {
             Your <b className="text-white">{rev.mine}</b> of {rev.rejections} rejection{rev.rejections === 1 ? '' : 's'} this month → about <b className="text-carrot">{share.toLocaleString()} $NERDY</b>
           </>
         ) : (
-          'Get rejected this month to claim a slice.'
+          me?.verified ? 'Get rejected this month to claim a slice.' : 'Get verified to earn a slice from your rejections.'
         )}
       </p>
       {rev.last && rev.last.paid > 0 && (
@@ -135,13 +136,16 @@ function RevenueShare() {
   )
 }
 
-/** Verification = $NERDY locked with the platform. Needed to send, accept and reject requests. */
+const fmtDate = (t: number) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+
+/** Verification = $NERDY locked with the platform. Only verified residents earn from rejections. */
 function VerifyCard({ onVerify, onUnlock }: { onVerify: () => void; onUnlock: () => void }) {
   const me = useStore(selectMe)
   const locked = useStore((s) => s.locked)
   const ledger = useStore((s) => s.ledger)
-  const { verifyLockAmount: LOCK, tokenMint } = useStore((s) => s.settings)
+  const { verifyLockAmount: LOCK, tokenMint, rejectReward: REWARD, withdrawWaitDays: WAIT, phase } = useStore((s) => s.settings)
   const wallet = useStore((s) => s.wallet)
+  const opensAt = useStore(withdrawOpensAt)
   const returning = ledger.find((e) => e.kind === 'unlock' && (e.status === 'requested' || e.status === 'processing'))
   if (me?.verified)
     return (
@@ -151,8 +155,11 @@ function VerifyCard({ onVerify, onUnlock }: { onVerify: () => void; onUnlock: ()
             <BadgeCheck className="h-6 w-6" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold">You’re verified</p>
+            <p className="font-semibold">You’re verified · earning</p>
             <p className="text-sm text-white/60">{locked > 0 ? `${locked.toLocaleString()} $NERDY locked` : 'Verified by the town hall'}</p>
+            {opensAt && (
+              <p className="text-xs text-white/50">{opensAt <= Date.now() ? 'Withdrawals open' : `Withdrawals open ${fmtDate(opensAt)}`}</p>
+            )}
           </div>
           {locked > 0 && (
             <button onClick={onUnlock} className="chip shrink-0 py-2 text-white/60 hover:text-white">
@@ -170,13 +177,14 @@ function VerifyCard({ onVerify, onUnlock }: { onVerify: () => void; onUnlock: ()
             <ShieldCheck className="h-6 w-6" />
           </span>
           <div>
-            <h2 className="text-xl font-bold">Get verified</h2>
-            <p className="text-sm text-white/60">Needed to send, accept and reject requests.</p>
+            <h2 className="text-xl font-bold">Get verified to earn</h2>
+            <p className="text-sm text-white/60">{phase === 1 ? `${REWARD} $NERDY for every rejection.` : 'A share of the monthly revenue pool for every rejection.'}</p>
           </div>
         </div>
         <ul className="mt-4 space-y-1.5 text-sm text-white/70">
-          <li className="flex gap-2"><Lock className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Lock {LOCK} $NERDY with Nerdy Town</li>
-          <li className="flex gap-2"><LockOpen className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Unlock any time and get it back</li>
+          <li className="flex gap-2"><Lock className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Lock {LOCK.toLocaleString()} $NERDY with Nerdy Town</li>
+          <li className="flex gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Withdraw your earnings {WAIT} days after verifying</li>
+          <li className="flex gap-2"><LockOpen className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> Unlock any time and get the {LOCK.toLocaleString()} back</li>
           <li className="flex gap-2"><Coins className="mt-0.5 h-4 w-4 shrink-0 text-lime" /> No SOL needed. We pay the network fee</li>
         </ul>
         {returning ? (
@@ -185,7 +193,7 @@ function VerifyCard({ onVerify, onUnlock }: { onVerify: () => void; onUnlock: ()
           </p>
         ) : null}
         <button onClick={onVerify} disabled={!tokenMint || !wallet} className="btn-primary mt-5 w-full">
-          <ShieldCheck className="h-5 w-5" /> {tokenMint ? `Verify · lock ${LOCK} $NERDY` : 'Opens when $NERDY launches'}
+          <ShieldCheck className="h-5 w-5" /> {tokenMint ? `Verify · lock ${LOCK.toLocaleString()} $NERDY` : 'Opens when $NERDY launches'}
         </button>
         {!wallet && <p className="mt-2 text-center text-xs text-rizz">This account has no Solana wallet. Log in with a wallet or Google / X / email.</p>}
       </div>
@@ -213,7 +221,9 @@ export default function Dashboard() {
 
   const daily = dailyInfo(s)
   const { balance, wallet, ledger } = s
-  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, realUserGoal: GOAL, verifyLockAmount: LOCK } = s.settings
+  const { extraRequestCost: EXTRA_REQUEST_COST, minWithdraw: MIN_WITHDRAW, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD } = s.settings
+  const opensAt = withdrawOpensAt(s)
+  const canWithdraw = !!opensAt && opensAt <= Date.now() && !!wallet
 
   const { incoming, sent, matches, ls, pendingSent } = useMemo(() => {
     const mine = s.requests.filter((r) => r.from === me.id || r.to === me.id)
@@ -384,11 +394,6 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {tab === 'incoming' && !me.verified && incoming.length > 0 && (
-            <button onClick={() => setVerifyOpen(true)} className="mt-4 flex w-full items-center gap-2 rounded-2xl border border-lime/30 bg-lime/10 p-3 text-left text-sm text-white/80 hover:bg-lime/15">
-              <ShieldCheck className="h-5 w-5 shrink-0 text-lime" /> Get verified to answer these. Lock {LOCK} $NERDY, get it back any time.
-            </button>
-          )}
           <div className="mt-4 min-h-[260px]">
             <AnimatePresence mode="popLayout" initial={false}>
               {list.length === 0 ? (
@@ -535,7 +540,11 @@ export default function Dashboard() {
                 <span className="ml-2 text-lg text-carrot">$N</span>
               </p>
               <p className="mt-1 text-xs text-white/50">
-                {s.phase === 1 ? `${me.rejectionsReceived} rejections banked as popularity. Revenue share starts in Phase 2.` : `Paid monthly from the revenue share · min withdraw ${MIN_WITHDRAW}`}
+                {!me.verified
+                  ? `Get verified to earn ${s.phase === 1 ? `${REWARD} $NERDY per rejection` : 'from rejections'}.`
+                  : s.phase === 1
+                    ? `${REWARD} $NERDY per rejection · min withdraw ${MIN_WITHDRAW}`
+                    : `Paid monthly from the revenue share · min withdraw ${MIN_WITHDRAW}`}
               </p>
 
               {s.phase === 2 && <RevenueShare />}
@@ -555,9 +564,14 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-              <button onClick={() => setWithdrawOpen(true)} disabled={s.phase === 1 || !wallet} className="btn-primary mt-3 w-full">
+              <button onClick={() => setWithdrawOpen(true)} disabled={!canWithdraw} className="btn-primary mt-3 w-full">
                 <ArrowUpRight className="h-4 w-4" /> Withdraw
               </button>
+              {!canWithdraw && (
+                <p className="mt-2 text-center text-xs text-white/45">
+                  {!me.verified ? `Withdrawals open ${s.settings.withdrawWaitDays} days after you get verified.` : opensAt ? `Withdrawals open ${fmtDate(opensAt)} (${s.settings.withdrawWaitDays} days after verifying).` : ''}
+                </p>
+              )}
 
               {ledger.length > 0 && (
                 <div className="mt-5">
@@ -593,14 +607,14 @@ export default function Dashboard() {
 
       {/* verify modal */}
       <Modal open={verifyOpen} onClose={() => setVerifyOpen(false)} title="Get verified">
-        <h2 className="text-2xl font-bold">Lock {LOCK} $NERDY</h2>
+        <h2 className="text-2xl font-bold">Lock {LOCK.toLocaleString()} $NERDY</h2>
         <p className="mt-1 text-sm text-white/60">
-          Pick the login you used to sign in{wallet ? <> (<span className="font-mono">{shortAddress(wallet)}</span>)</> : null}. It asks you to approve sending {LOCK} $NERDY to Nerdy Town. We pay the network fee.
+          Pick the login you used to sign in{wallet ? <> (<span className="font-mono">{shortAddress(wallet)}</span>)</> : null}. It asks you to approve sending {LOCK.toLocaleString()} $NERDY to Nerdy Town. We pay the network fee.
         </p>
         <div className="mt-6">
           <WalletPicker onPick={verify} busyId={typeof busy === 'string' ? busy : null} disabled={!!busy} />
         </div>
-        <p className="mt-4 text-center text-xs text-white/40">Unlock whenever you like: your {LOCK} $NERDY is sent back to this wallet and the badge goes away.</p>
+        <p className="mt-4 text-center text-xs text-white/40">Unlock whenever you like: your {LOCK.toLocaleString()} $NERDY is sent back to this wallet and the badge goes away.</p>
       </Modal>
 
       {/* unlock modal */}
@@ -608,7 +622,7 @@ export default function Dashboard() {
         <div className="text-center">
           <LockOpen className="mx-auto h-10 w-10 text-carrot" />
           <h2 className="mt-3 text-2xl font-bold">Unlock {s.locked.toLocaleString()} $NERDY?</h2>
-          <p className="mt-2 text-white/60">It’s sent back to {wallet ? <span className="font-mono">{shortAddress(wallet)}</span> : 'your wallet'} after a quick review (usually within 24h). You lose the verified badge right away, so you can’t send or answer requests until you lock again.</p>
+          <p className="mt-2 text-white/60">It’s sent back to {wallet ? <span className="font-mono">{shortAddress(wallet)}</span> : 'your wallet'} after a quick review (usually within 24h). You lose the verified badge right away: rejections stop earning, and your earned balance can only be withdrawn {s.settings.withdrawWaitDays} days after you verify again.</p>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button onClick={() => setUnlockOpen(false)} className="btn-ghost">Keep it locked</button>
             <button onClick={unlock} disabled={busy === 'unlock'} className="btn-primary">

@@ -41,6 +41,8 @@ export interface Profile {
   rejectionsReceived: number
   accepts: number
   verified?: boolean
+  /** When the current verification started (withdrawals open withdraw_wait_days later). */
+  verifiedAt?: number | null
 }
 
 export type SocialPlatform = 'Instagram' | 'X' | 'Telegram' | 'Snapchat' | 'Discord' | 'TikTok' | 'WhatsApp' | 'Email'
@@ -81,8 +83,12 @@ export interface Settings {
   /** Phase 2 starts by itself once this many verified residents exist. */
   realUserGoal: number
   phase2At: number | null
-  /** $NERDY to lock for the verified badge (needed to send / answer requests). */
+  /** $NERDY to lock for the verified badge. Only verified residents earn from rejections. */
   verifyLockAmount: number
+  /** Phase 1: $NERDY a verified resident earns per rejection. */
+  rejectReward: number
+  /** Withdrawals open this many days after getting verified. */
+  withdrawWaitDays: number
   extraRequestCost: number
   minWithdraw: number
   tokenMint: string | null

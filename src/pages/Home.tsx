@@ -41,6 +41,7 @@ function Hero() {
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
   const tokenMint = useStore((s) => s.settings.tokenMint)
+  const REWARD = useStore((s) => s.settings.rejectReward)
   // Verified residents first in the avatar stack.
   const faces = useMemo(() => Object.values(profiles).sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0)).slice(0, 5), [profiles])
   const mxRaw = useMotionValue(0)
@@ -101,7 +102,7 @@ function Hero() {
         </motion.h1>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mx-auto mt-8 max-w-xl text-lg text-white/70 lg:mx-0">
-          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs — and in Phase 2, every L earns you a cut of the town’s <b className="text-carrot">$NERDY</b> revenue.
+          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs — and once you’re verified, every L pays you <b className="text-carrot">{REWARD} $NERDY</b>.
         </motion.p>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
@@ -165,7 +166,7 @@ function Hero() {
         </FloatCard>
         <FloatCard depth={0.8} mx={mx} my={my} className="bottom-[4%] left-[8%] [&>div]:[animation-delay:-3.5s]">
           <div className="flex items-center gap-2 rounded-full border-2 border-ink-950 bg-carrot px-3 py-1.5 font-mono text-sm font-bold text-ink-950 shadow-pop">
-            <Coins className="h-4 w-4" /> +1 revenue share
+            <Coins className="h-4 w-4" /> +{REWARD} $NERDY
           </div>
         </FloatCard>
         <FloatCard depth={-0.6} mx={mx} my={my} className="right-[6%] top-[2%] [&>div]:[animation-delay:-1s]">
@@ -181,7 +182,7 @@ function Hero() {
 // ------------------------------------------------------------------ MARQUEE
 
 function Marquee() {
-  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Ls earn revenue share', 'Glasses on. Fear off.']
+  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Verified Ls pay $NERDY', 'Glasses on. Fear off.']
   const row = [...items, ...items]
   return (
     <div className="overflow-hidden py-8">
@@ -201,9 +202,11 @@ function Marquee() {
 // ------------------------------------------------------------------ WIN-WIN DEMO
 
 function WinWinDemo() {
+  const REWARD = useStore((s) => s.settings.rejectReward)
   const [state, setState] = useState<'idle' | 'sending' | 'accepted' | 'rejected'>('idle')
   const [pop, setPop] = useState(41)
   const [tokens, setTokens] = useState(0)
+  const [shares, setShares] = useState(0)
   const [phase2, setPhase2] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
   const seed = useMemo(() => ({ ...seedAvatar('demo-crush-7'), hairStyle: 'long' as const, mood: 'smug' as const }), [])
@@ -218,7 +221,8 @@ function WinWinDemo() {
       if (outcome === 'accepted') confetti({ ...at, emoji: ['💬', '💘', '🤓'] })
       else {
         setPop((p) => p + 1)
-        if (phase2) setTokens((t) => t + 1)
+        if (phase2) setShares((t) => t + 1)
+        else setTokens((t) => t + REWARD)
         confetti({ ...at, colors: ['#ff4d8d', '#ff7a1a', '#8b5cf6'], count: 70, emoji: ['🏆', '🤓'] })
       }
     }, 1300)
@@ -292,7 +296,7 @@ function WinWinDemo() {
                   ) : state === 'rejected' ? (
                     <motion.div key="r" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="rounded-2xl border border-rizz/30 bg-rizz/10 p-3 text-center">
                       <p className="text-xs font-semibold uppercase text-rizz">L converted to W</p>
-                      <p className="font-display text-lg font-bold">Popularity {pop} {phase2 && <span className="text-carrot">· {tokens} share{tokens === 1 ? '' : 's'}</span>}</p>
+                      <p className="font-display text-lg font-bold">Popularity {pop} <span className="text-carrot">· {phase2 ? `${shares} share${shares === 1 ? '' : 's'}` : `${tokens} $NERDY`}</span></p>
                     </motion.div>
                   ) : (
                     <motion.div key="i" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center text-sm text-white/60">
@@ -340,7 +344,7 @@ function WinWinDemo() {
           </div>
           <p className="mt-3 text-white/60">Congrats, it’s logged on your dashboard. Rejections are clout here — the more you shoot, the more popular you get.</p>
           <ul className="mt-5 space-y-2 text-sm">
-            {['Phase 1: +1 public popularity', 'Phase 2: +1 share of the monthly revenue pool', 'Withdraw to wallet or spend in-app'].map((t) => (
+            {['+1 public popularity, always', `Verified, Phase 1: +${REWARD} $NERDY`, 'Verified, Phase 2: +1 share of the monthly pool', 'Withdraw to your wallet'].map((t) => (
               <li key={t} className="flex items-center gap-2 text-white/80">
                 <Check className="h-4 w-4 text-rizz" /> {t}
               </li>
@@ -355,10 +359,10 @@ function WinWinDemo() {
 // ------------------------------------------------------------------ HOW IT WORKS
 
 function HowItWorks() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, extraRequestCost: EXTRA } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, rejectReward: REWARD } = useStore((s) => s.settings)
   const steps = [
     { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign in with Google, X, email or a Solana wallet. Add a photo (or generate your inner nerd), a bio and your interests. Your socials stay locked.', color: 'from-grape to-byte' },
-    { icon: Send, title: 'Send partner requests', body: `Lock ${LOCK} $NERDY to get verified (you get it back any time), then shoot your shot. ${FREE_DAILY_REQUESTS} free requests a day, more for ${EXTRA} $NERDY each in Phase 2.`, color: 'from-carrot to-rizz' },
+    { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Lock ${LOCK.toLocaleString()} $NERDY to get verified and every rejection pays ${REWARD} $NERDY.`, color: 'from-carrot to-rizz' },
     { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get their socials. Rejected → you get popularity now, and a cut of the platform’s revenue in Phase 2.', color: 'from-lime to-byte' },
   ]
   return (
@@ -392,7 +396,7 @@ function HowItWorks() {
 // ------------------------------------------------------------------ ROADMAP
 
 function Roadmap() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, extraRequestCost: EXTRA_REQUEST_COST, realUserGoal: GOAL, verifyLockAmount: LOCK } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, extraRequestCost: EXTRA_REQUEST_COST, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD, withdrawWaitDays: WAIT } = useStore((s) => s.settings)
   const phase = useStore((s) => s.phase)
   const verified = useStore((s) => s.stats.verified)
   const tokenMint = useStore((s) => s.settings.tokenMint)
@@ -405,14 +409,14 @@ function Roadmap() {
       n: 1,
       title: 'Build the town',
       sub: `Until ${GOAL.toLocaleString()} verified nerds live here`,
-      points: [`Lock ${LOCK} $NERDY to get verified (unlock any time)`, `${FREE_DAILY_REQUESTS} free partner requests per day`, 'Accept → instant socials reveal', 'Rejections build public popularity'],
+      points: [`${FREE_DAILY_REQUESTS} free partner requests per day, for everyone`, `Verified (${LOCK.toLocaleString()} $NERDY locked): every rejection pays ${REWARD} $NERDY`, `Withdraw ${WAIT} days after verifying`, 'Accept → instant socials reveal'],
       icon: Shield,
     },
     {
       n: 2,
       title: 'Revenue share',
       sub: `Starts by itself at ${GOAL.toLocaleString()} verified residents`,
-      points: [`Buy extra daily requests (${EXTRA_REQUEST_COST} $NERDY each)`, 'All $NERDY spent in town goes into a monthly pool', 'The pool is split among rejected nerds every month: more Ls, bigger cut', 'Withdraw to your Solana wallet'],
+      points: [`Buy extra daily requests (${EXTRA_REQUEST_COST} $NERDY each)`, 'All $NERDY spent in town goes into a monthly pool', 'The pool is split among verified rejected nerds every month: more Ls, bigger cut', 'Withdraw to your Solana wallet'],
       icon: Rocket,
     },
   ]
@@ -556,14 +560,15 @@ function HallOfFame() {
 // ------------------------------------------------------------------ FAQ
 
 function FAQ() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD, withdrawWaitDays: WAIT } = useStore((s) => s.settings)
   const qs = [
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
-    ['What happens when I get rejected?', 'It’s logged on your dashboard and your public popularity goes up by one. In Phase 2, every rejection from a real resident also earns you a share of that month’s revenue pool.'],
+    ['What happens when I get rejected?', `It’s logged on your dashboard and your public popularity goes up by one. If you’re verified, it also pays: ${REWARD} $NERDY in Phase 1, a share of that month’s revenue pool in Phase 2.`],
     ['How many requests can I send?', `${FREE_DAILY_REQUESTS} free requests per day, reset at midnight UTC. In Phase 2 you can buy more with $NERDY.`],
-    ['How does the revenue share work?', 'In Phase 2, every $NERDY spent in town (like buying extra requests) goes into that month’s pool. When the month ends, the pool is split among everyone who got rejected that month, in proportion to their rejections. 3 rejections out of 100 = 3% of the pool. It lands in your balance on the 1st, ready to withdraw.'],
+    ['How does the revenue share work?', 'In Phase 2, every $NERDY spent in town (like buying extra requests) goes into that month’s pool. When the month ends, the pool is split among verified residents who got rejected that month, in proportion to their rejections. 3 rejections out of 100 = 3% of the pool. It lands in your balance on the 1st, ready to withdraw.'],
     ['When does Phase 2 start?', `Automatically, the moment ${GOAL.toLocaleString()} verified residents live in Nerdy Town. Nobody can flip it early.`],
-    ['Why lock $NERDY to get verified?', `It keeps bots and fake accounts out: sending, accepting and rejecting requests needs ${LOCK} $NERDY locked with Nerdy Town. It’s not a fee. Unlock any time and it goes back to your wallet (the badge goes with it).`],
+    ['How do I earn $NERDY?', `Get verified by locking ${LOCK.toLocaleString()} $NERDY with Nerdy Town. Then every rejection pays ${REWARD} $NERDY in Phase 1 (a share of the monthly pool in Phase 2). You can withdraw ${WAIT} days after verifying. Requests are free for everyone; only earning needs the badge.`],
+    ['Is the lock a fee?', `No. Unlock any time and your ${LOCK.toLocaleString()} $NERDY goes back to your wallet. The badge goes with it, so rejections stop earning until you lock again.`],
     ['How do I sign up?', 'Tap “Continue with Google, X or email”, or use a Solana wallet like Phantom, Solflare or Trust. Social logins get a free Solana wallet of their own, so everyone can verify and get paid.'],
     ['Can I farm rejections?', 'You can only request each person once, and requests are capped daily. Shooting your shot is the only strategy.'],
   ]

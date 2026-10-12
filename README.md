@@ -5,9 +5,9 @@
 Utility platform for the **$NERDY** meme coin. Send a partner request to anyone:
 
 - **Accepted** → you instantly get their socials (Instagram, X, Telegram, Snapchat, Discord, TikTok, WhatsApp or email).
-- **Rejected** → it's logged on your dashboard as public popularity (Phase 1), and in Phase 2 earns a share of the platform's monthly revenue. Phase 2 starts by itself at 1000 verified residents.
+- **Rejected** → it's logged on your dashboard as public popularity. Phase 2 starts by itself at 1000 verified residents.
 
-Sending, accepting and rejecting requests needs the **verified** badge: lock 100 $NERDY with the platform (unlock any time). Everyone signs in with a Solana wallet, or with Google / X / email through Reown, which creates a wallet for them.
+Anyone can send, accept and reject requests. Only **verified** residents earn: lock 2000 $NERDY with the platform (unlock any time), then every rejection pays 20 $NERDY in Phase 1 (a share of the monthly pool in Phase 2). Withdrawals open 14 days after verifying. Everyone signs in with a Solana wallet, or with Google / X / email through Reown, which creates a wallet for them.
 
 ## Stack
 
@@ -18,7 +18,7 @@ Sending, accepting and rejecting requests needs the **verified** badge: lock 100
   - photo storage,
   - realtime updates for requests.
 - **Serverless functions (Vercel):**
-  - `api/lock.ts`: verification. Builds the 100 $NERDY transfer (platform pays the fee), broadcasts the wallet-signed transaction and checks it on-chain before marking the user verified.
+  - `api/lock.ts`: verification. Builds the lock transfer (2000 $NERDY by default) (platform pays the fee), broadcasts the wallet-signed transaction and checks it on-chain before marking the user verified.
   - `api/approve-withdrawal.ts`: sends withdrawals and unlock returns (SPL / Token-2022) from the platform wallet after admin approval.
 
 **First-time setup: follow [SETUP.md](SETUP.md).**
@@ -51,9 +51,10 @@ Everything that matters is enforced in the database (`supabase/schema.sql`), not
 - **Socials** (`contacts` table) are readable only by their owner and by people whose request that owner accepted.
 - **Counters** (popularity, matches, hearts broken), **balances** and **verified badges** can't be written by users.
 - **Wallet:** each account's wallet is the address it signed in with, read from the Supabase auth identity (`_wallet()`), never from the browser.
-- **Verification:** `send_request` / `respond_request` require `verified`. Only the server can call `record_lock()` (after checking the transfer on-chain); `unlock_verification()` removes the badge and queues the return payout.
+- **Verification & earning:** anyone with a profile can send / answer. A rejection earns only if the sender was verified at that moment (`requests.earns`): Phase 1 pays `reject_reward` (20) instantly, Phase 2 counts it for the revenue share. Only the server can call `record_lock()` (after checking the transfer on-chain); `unlock_verification()` removes the badge and queues the return payout.
+- **Withdrawals:** only verified residents, `withdraw_wait_days` (14) after `verified_at`.
 - **Phase 2 trigger:** switches itself when `real_user_goal` (1000) verified residents exist. Nobody can set it by hand and it never goes back.
-- **Revenue share:** $NERDY spent on extra requests (1 each, plus admin-added revenue) is pooled per UTC month in `revenue`. `settle_revenue()` splits each finished month's pool among residents rejected that month, in proportion to their rejections. Dust rolls over and each month is paid once (`distributions`).
+- **Revenue share:** $NERDY spent on extra requests (1 each, plus admin-added revenue) is pooled per UTC month in `revenue`. `settle_revenue()` splits each finished month's pool among verified residents rejected that month, in proportion to their rejections. Dust rolls over and each month is paid once (`distributions`).
 - **Withdrawals** reserve the balance immediately and wait for admin approval, which prevents double-spending.
 - **Blocking** hides both people from each other and prevents requests between them.
 

@@ -19,6 +19,8 @@ About 20 minutes. You need a free [Supabase](https://supabase.com) account, a fr
 > - `001_revenue_share.sql`: monthly revenue share (skip if you already ran it).
 > - `002_wallet_verification.sql`: wallet/social login only, verification by locking $NERDY, Phase 2 at 1000 verified residents, NPCs deleted, extra requests cost 1.
 >
+> - `003_earn_when_verified.sql`: everyone can send / answer requests; only verified residents earn (20 $NERDY per rejection in Phase 1); withdrawals 14 days after verifying; lock 2000 $NERDY.
+>
 > 002 deletes all NPCs and their requests, recomputes everyone's counters from real interactions, clears old verified badges and puts the site back in Phase 1. Accounts made with email + password can't log in anymore (see step 5 to become admin again).
 
 ## 3. Login settings
@@ -90,16 +92,19 @@ Verification and payouts both go through one platform wallet.
 
 1. Go to **[jup.ag/studio](https://jup.ag/studio)**, connect your dev wallet and create the token (name *nerdy*, ticker *NERDY*, logo, and `https://nerdytown.space` as the website).
 2. Copy the **mint address (CA)** from the token page and paste it into **Admin panel → $NERDY token mint address** → **Save**. This:
-   - turns on verification (the **Verify · lock 100 $NERDY** button),
+   - turns on verification (the **Verify · lock 2,000 $NERDY** button),
    - shows “Live on Jupiter · Buy now” and **Buy $NERDY on Jupiter** on the homepage.
 
-## 8. Verification (locking $NERDY)
+## 8. Verification and earning (Phase 1)
 
-- Sending, accepting and rejecting requests needs the verified badge. Browsing and creating a profile don't.
-- **Verify · lock 100 $NERDY** on the dashboard: the user picks the login they signed in with and approves sending 100 $NERDY to the platform wallet. The platform pays the network fee. The server checks the transfer on the blockchain before giving the badge, so it can't be faked.
-- **Unlock** any time: the badge goes away immediately and a 100 $NERDY payout back to their wallet appears in **Admin → Withdrawals** (tagged *Unlock*). **Approve & send** sends it. This works in Phase 1 too.
-- Keep the locked tokens in the platform wallet so unlocks can always be paid.
-- The amount is a setting: **Admin → Verification lock**.
+- **Everyone** can send, accept and reject requests. Only **verified** residents earn $NERDY from being rejected.
+- **Verify · lock 2,000 $NERDY** on the dashboard: the user picks the login they signed in with and approves sending 2,000 $NERDY to the platform wallet. The platform pays the network fee. The server checks the transfer on the blockchain before giving the badge, so it can't be faked.
+- **Phase 1:** every rejection a verified resident receives pays **20 $NERDY** into their app balance. (A request rejected while the sender wasn't verified never pays, even if they verify later.)
+- **Withdrawals open 14 days after verifying**, in Phase 1 and Phase 2. Users request them; you approve each one in **Admin → Withdrawals**. Check an account's age and activity first.
+- **Unlock** any time: the badge goes away immediately, rejections stop earning, and a 2,000 $NERDY return payout appears in **Admin → Withdrawals** (tagged *Unlock*). Their earned balance stays in the app; they can withdraw it again 14 days after verifying again.
+- Keep the locked tokens in the platform wallet so unlocks can always be paid, and keep enough $NERDY there for rewards people withdraw.
+- Settings in the Admin panel: **Verification lock** (2000), **$NERDY per rejection (Phase 1)** (20), **Days before withdrawing** (14).
+- Most a verified resident can earn in Phase 1: free requests per day × 20 (3 × 20 = 60 $NERDY a day), since each rejection needs a request they sent.
 - If you remove a user, tokens they have locked stay in the platform wallet. People can't delete their own account while tokens are locked.
 
 ## 9. Phase 2 and the monthly revenue share
@@ -109,9 +114,9 @@ Verification and payouts both go through one platform wallet.
 **In Phase 2:**
 - Users can buy extra requests for **1 $NERDY** each (from their in-app balance).
 - Every $NERDY spent in the app goes into the **current month's pool**. You can add outside income too, like Jupiter creator trading fees: **Admin → Revenue share → Add to pool**. If you do, move those tokens into the platform wallet too.
-- On the 1st of each month (UTC), last month's pool is split among everyone who got rejected that month, in proportion to their rejections (3 of 100 rejections = 3% of the pool). Leftovers roll into the next month.
+- The fixed 20 $NERDY reward stops. On the 1st of each month (UTC), last month's pool is split among **verified** residents who got rejected that month, in proportion to their rejections (3 of 100 rejections = 3% of the pool). Leftovers roll into the next month.
 - The payout runs by itself the first time anyone opens the site in the new month. To make it exact on a quiet day, schedule it: Supabase → **Integrations → Cron** → new job, schedule `5 0 1 * *`, SQL `select public.settle_revenue();`.
-- Withdrawals: users request them; you approve each one in **Admin → Withdrawals**. Check an account's age and activity first, since people can make extra accounts to reject each other.
+- Withdrawals work as in Phase 1 (14 days after verifying, approved by you).
 
 ## Useful SQL
 
