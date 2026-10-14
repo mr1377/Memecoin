@@ -54,7 +54,7 @@ Everything that matters is enforced in the database (`supabase/schema.sql`), not
 - **Verification & earning:** anyone with a profile can send / answer. A rejection earns only if the sender was verified at that moment (`requests.earns`): Phase 1 pays `reject_reward` (20) instantly, Phase 2 counts it for the revenue share. Only the server can call `record_lock()` (after checking the transfer on-chain); `unlock_verification()` removes the badge and queues the return payout.
 - **Withdrawals:** only verified residents, `withdraw_wait_days` (14) after `verified_at`.
 - **Phase 2 trigger:** switches itself when `real_user_goal` (1000) verified residents exist. Nobody can set it by hand and it never goes back.
-- **Revenue share:** $NERDY spent on extra requests (1 each, plus admin-added revenue) is pooled per UTC month in `revenue`. `settle_revenue()` splits each finished month's pool among verified residents rejected that month, in proportion to their rejections. Dust rolls over and each month is paid once (`distributions`).
+- **Revenue share:** $NERDY spent on extra requests (10 each, plus admin-added revenue) is pooled per UTC month in `revenue`. `settle_revenue()` splits each finished month's pool among verified residents rejected that month, in proportion to their rejections. Dust rolls over and each month is paid once (`distributions`).
 - **Withdrawals** reserve the balance immediately and wait for admin approval, which prevents double-spending.
 - **Blocking** hides both people from each other and prevents requests between them.
 

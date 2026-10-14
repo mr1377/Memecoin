@@ -20,6 +20,7 @@ About 20 minutes. You need a free [Supabase](https://supabase.com) account, a fr
 > - `002_wallet_verification.sql`: wallet/social login only, verification by locking $NERDY, Phase 2 at 1000 verified residents, NPCs deleted, extra requests cost 1.
 >
 > - `003_earn_when_verified.sql`: everyone can send / answer requests; only verified residents earn (20 $NERDY per rejection in Phase 1); withdrawals 14 days after verifying; lock 2000 $NERDY.
+> - `004_token_and_price.sql`: sets the $NERDY token address (`8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx`) and makes extra requests cost 10 $NERDY.
 >
 > 002 deletes all NPCs and their requests, recomputes everyone's counters from real interactions, clears old verified badges and puts the site back in Phase 1. Accounts made with email + password can't log in anymore (see step 5 to become admin again).
 
@@ -91,7 +92,7 @@ Verification and payouts both go through one platform wallet.
 ## 7. Launching $NERDY on Jupiter
 
 1. Go to **[jup.ag/studio](https://jup.ag/studio)**, connect your dev wallet and create the token (name *nerdy*, ticker *NERDY*, logo, and `https://nerdytown.space` as the website).
-2. Copy the **mint address (CA)** from the token page and paste it into **Admin panel → $NERDY token mint address** → **Save**. This:
+2. The token address `8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx` is already set (schema / migration 004). To change it: **Admin panel → $NERDY token mint address** → **Save**. Having it set:
    - turns on verification (the **Verify · lock 2,000 $NERDY** button),
    - shows “Live on Jupiter · Buy now” and **Buy $NERDY on Jupiter** on the homepage.
 
@@ -112,7 +113,7 @@ Verification and payouts both go through one platform wallet.
 **When Phase 2 starts:** automatically, the moment **1000 verified residents** exist. Nobody can switch it by hand, and it never goes back. The number is under **Admin → Verified residents for Phase 2**.
 
 **In Phase 2:**
-- Users can buy extra requests for **1 $NERDY** each (from their in-app balance).
+- Users can buy extra requests for **10 $NERDY** each (from their in-app balance).
 - Every $NERDY spent in the app goes into the **current month's pool**. You can add outside income too, like Jupiter creator trading fees: **Admin → Revenue share → Add to pool**. If you do, move those tokens into the platform wallet too.
 - The fixed 20 $NERDY reward stops. On the 1st of each month (UTC), last month's pool is split among **verified** residents who got rejected that month, in proportion to their rejections (3 of 100 rejections = 3% of the pool). Leftovers roll into the next month.
 - The payout runs by itself the first time anyone opens the site in the new month. To make it exact on a quiet day, schedule it: Supabase → **Integrations → Cron** → new job, schedule `5 0 1 * *`, SQL `select public.settle_revenue();`.

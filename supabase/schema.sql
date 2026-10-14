@@ -15,7 +15,7 @@ create table public.settings (
   id int primary key default 1 check (id = 1),
   phase int not null default 1 check (phase in (1, 2)),
   free_daily_requests int not null default 3 check (free_daily_requests between 0 and 50),
-  extra_request_cost int not null default 1 check (extra_request_cost > 0),
+  extra_request_cost int not null default 10 check (extra_request_cost > 0),
   min_withdraw int not null default 500 check (min_withdraw > 0),
   -- Verification: lock this many $NERDY with the platform. Only verified residents earn $NERDY.
   verify_lock_amount int not null default 2000 check (verify_lock_amount > 0),
@@ -30,7 +30,8 @@ create table public.settings (
   token_decimals int not null default 6 check (token_decimals between 0 and 12),
   updated_at timestamptz not null default now()
 );
-insert into public.settings (id) values (1);
+-- $NERDY on Solana (launched on Jupiter).
+insert into public.settings (id, token_mint) values (1, '8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx');
 
 create table public.admins (
   user_id uuid primary key references auth.users (id) on delete cascade

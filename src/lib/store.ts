@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS: Settings = {
   verifyLockAmount: 2000,
   rejectReward: 20,
   withdrawWaitDays: 14,
-  extraRequestCost: 1,
+  extraRequestCost: 10,
   minWithdraw: 500,
   tokenMint: null,
   tokenDecimals: 6,
