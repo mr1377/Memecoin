@@ -4,9 +4,7 @@ import { Compass, Home, LayoutDashboard, LogIn, UserRound } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { selectMe, useStore } from '../lib/store'
-import { X_HANDLE, X_URL } from '../lib/jupiter'
 import Logo from './Logo'
-import XIcon from './XIcon'
 import PhaseBadge from './PhaseBadge'
 import ProfilePhoto from './ProfilePhoto'
 
@@ -43,9 +41,6 @@ export function TopNav() {
         </nav>
         <div className="flex items-center gap-2">
           <PhaseBadge className="hidden sm:flex" />
-          <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label={`Nerdy Town on X (${X_HANDLE})`} title={`Follow ${X_HANDLE} on X`} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:border-white/30 hover:text-white">
-            <XIcon className="h-4 w-4" />
-          </a>
           {me ? (
             <Link to="/dashboard" className="h-10 w-10 overflow-hidden rounded-full border-2 border-carrot/80 transition hover:scale-105" aria-label="My dashboard">
               <ProfilePhoto profile={me} className="h-full w-full" />

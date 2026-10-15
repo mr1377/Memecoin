@@ -41,7 +41,6 @@ function FloatCard({ className, children, depth, mx, my }: { className: string; 
 function Hero() {
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
-  const tokenMint = useStore((s) => s.settings.tokenMint)
   const REWARD = useStore((s) => s.settings.rejectReward)
   // Verified residents first in the avatar stack.
   const faces = useMemo(() => Object.values(profiles).sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0)).slice(0, 5), [profiles])
@@ -60,23 +59,11 @@ function Hero() {
   return (
     <section onMouseMove={onMove} className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-10 pt-8 sm:px-6 md:pt-16 lg:grid-cols-[1.1fr_1fr] lg:gap-6 lg:pb-20">
       <div className="relative z-10 text-center lg:text-left">
-        <motion.a
-          href={tokenMint ? jupiterBuyUrl(tokenMint) : '#roadmap'}
-          {...(tokenMint ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 py-1 pl-1 pr-3 text-xs font-semibold text-white/80 backdrop-blur hover:border-carrot/50"
-        >
-          <span className="rounded-full bg-carrot px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-ink-950">$NERDY</span>
-          {tokenMint ? 'Live on Jupiter · Buy now' : 'Launching on Jupiter'}
-          <ArrowRight className="h-3.5 w-3.5" />
-        </motion.a>
-
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-6 text-[2.9rem] font-extrabold leading-[0.95] sm:text-7xl lg:text-[5.2rem]"
+          className="text-[2.9rem] font-extrabold leading-[0.95] sm:text-7xl lg:text-[5.2rem]"
         >
           Where nerds
           <br />
