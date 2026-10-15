@@ -10,7 +10,8 @@ import { Glasses } from '../components/Logo'
 import Mascot from '../components/Mascot'
 import NerdAvatar from '../components/NerdAvatar'
 import ProfilePhoto from '../components/ProfilePhoto'
-import { jupiterBuyUrl } from '../lib/jupiter'
+import XIcon from '../components/XIcon'
+import { jupiterBuyUrl, X_HANDLE, X_URL } from '../lib/jupiter'
 import { useStore } from '../lib/store'
 import { seedAvatar } from '../lib/avatar'
 
@@ -616,6 +617,9 @@ function FinalCTA() {
                 <Sparkles className="h-5 w-5 text-carrot" /> Create my profile
               </Link>
               <Link to="/explore" className="btn border-2 border-ink-950 bg-transparent hover:bg-ink-950/10">Explore first</Link>
+              <a href={X_URL} target="_blank" rel="noopener noreferrer" className="btn border-2 border-ink-950 bg-transparent hover:bg-ink-950/10">
+                <XIcon className="h-4 w-4" /> Follow {X_HANDLE}
+              </a>
             </div>
           </div>
           <div className="relative mx-auto aspect-square w-56 sm:w-72">
@@ -630,6 +634,7 @@ function FinalCTA() {
 
 export function Footer() {
   const isAdmin = useStore((s) => s.isAdmin)
+  const tokenMint = useStore((s) => s.settings.tokenMint)
   return (
     <footer className="mx-auto max-w-7xl px-4 pb-10 pt-10 text-sm text-white/40 sm:px-6">
       <div className="flex flex-col gap-6 border-t border-white/10 pt-8 md:flex-row md:items-start md:justify-between">
@@ -639,11 +644,21 @@ export function Footer() {
           </p>
           <p className="mt-2">$NERDY is a meme coin with no intrinsic value or expectation of financial return. Not financial advice. Be kind — every nerd here is somebody’s favorite nerd.</p>
         </div>
-        {isAdmin && (
-          <Link to="/admin" className="chip self-start py-2 hover:border-carrot/50 hover:text-white">
-            <Rocket className="h-3.5 w-3.5" /> Admin panel
-          </Link>
-        )}
+        <div className="flex flex-wrap gap-2 self-start">
+          <a href={X_URL} target="_blank" rel="noopener noreferrer" className="chip py-2 text-white/80 hover:border-white/40 hover:text-white">
+            <XIcon className="h-3.5 w-3.5" /> {X_HANDLE}
+          </a>
+          {tokenMint && (
+            <a href={jupiterBuyUrl(tokenMint)} target="_blank" rel="noopener noreferrer" className="chip py-2 text-white/80 hover:border-carrot/50 hover:text-white">
+              <Coins className="h-3.5 w-3.5" /> $NERDY on Jupiter
+            </a>
+          )}
+          {isAdmin && (
+            <Link to="/admin" className="chip py-2 hover:border-carrot/50 hover:text-white">
+              <Rocket className="h-3.5 w-3.5" /> Admin panel
+            </Link>
+          )}
+        </div>
       </div>
       <p className="mt-8 flex items-center gap-2">
         <Lock className="h-3.5 w-3.5" /> Socials are only revealed on accept. © {new Date().getFullYear()} Nerdy Town.
