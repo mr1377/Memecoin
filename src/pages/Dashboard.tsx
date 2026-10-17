@@ -325,7 +325,7 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link to={`/u/${me.id}`} className="h-16 w-16 overflow-hidden rounded-2xl border-2 border-carrot shadow-carrot transition hover:rotate-3">
-            <ProfilePhoto profile={me} className="h-full w-full" />
+            <ProfilePhoto small profile={me} className="h-full w-full" />
           </Link>
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-carrot">Dashboard</p>
@@ -413,7 +413,7 @@ export default function Dashboard() {
                   return (
                     <motion.div key={r.id + tab} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -30 }} className="mb-2 flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-3 transition hover:bg-white/[0.05]">
                       <Link to={`/u/${o.id}`} className="shrink-0">
-                        <ProfilePhoto profile={o} className="h-14 w-14 rounded-2xl" />
+                        <ProfilePhoto small profile={o} className="h-14 w-14 rounded-2xl" />
                       </Link>
                       <div className="min-w-0 flex-1">
                         <Link to={`/u/${o.id}`} className="block truncate font-semibold hover:text-carrot">

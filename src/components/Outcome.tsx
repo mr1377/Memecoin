@@ -41,10 +41,10 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
       <div className="text-center">
         <div className="relative mx-auto flex h-28 w-48 items-center justify-center">
           <motion.div initial={{ x: 40, rotate: 10 }} animate={{ x: -28, rotate: -8 }} transition={{ type: 'spring', stiffness: 200, damping: 12 }} className="absolute h-24 w-24 overflow-hidden rounded-3xl border-4 border-ink-800 shadow-xl">
-            <ProfilePhoto profile={me} className="h-full w-full" />
+            <ProfilePhoto small profile={me} className="h-full w-full" />
           </motion.div>
           <motion.div initial={{ x: -40, rotate: -10 }} animate={{ x: 28, rotate: 8 }} transition={{ type: 'spring', stiffness: 200, damping: 12 }} className="absolute h-24 w-24 overflow-hidden rounded-3xl border-4 border-ink-800 shadow-xl">
-            <ProfilePhoto profile={other} className="h-full w-full" />
+            <ProfilePhoto small profile={other} className="h-full w-full" />
           </motion.div>
           <motion.span
             initial={{ scale: 0 }}

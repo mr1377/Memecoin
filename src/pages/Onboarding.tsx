@@ -9,6 +9,7 @@ import NerdAvatar from '../components/NerdAvatar'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
 import { AVATAR_OPTIONS, seedAvatar } from '../lib/avatar'
+import { encodePhoto } from '../lib/photos'
 import { api, selectMe, useStore, type PhotoDraft } from '../lib/store'
 import type { AvatarSeed, Gender, NerdClass, Profile, Social } from '../lib/types'
 import { PLATFORMS, platformInfo, validateSocial } from '../lib/socials'
@@ -31,26 +32,10 @@ const STEPS = ['Basics', 'Photos', 'Vibe', 'Private']
 
 const uid = () => crypto.randomUUID()
 
-/** Downscale to max 1080px JPEG before upload (keeps storage + bandwidth small, strips EXIF). */
-async function resizeImage(file: File, max = 1080): Promise<PhotoDraft> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((res, rej) => {
-      const i = new Image()
-      i.onload = () => res(i)
-      i.onerror = rej
-      i.src = url
-    })
-    const scale = Math.min(1, max / Math.max(img.width, img.height))
-    const c = document.createElement('canvas')
-    c.width = Math.round(img.width * scale)
-    c.height = Math.round(img.height * scale)
-    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-    const blob = await new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', 0.82))
-    return { blob, url: URL.createObjectURL(blob) }
-  } finally {
-    URL.revokeObjectURL(url)
-  }
+/** Shrinks the photo in the browser (WebP, full + thumbnail) before it's uploaded. */
+async function preparePhoto(file: File): Promise<PhotoDraft> {
+  const photo = await encodePhoto(file)
+  return { photo, url: photo.url }
 }
 
 function Seg<T extends string>({ options, value, onChange, name }: { options: readonly T[]; value: T; onChange: (v: T) => void; name: string }) {
@@ -184,7 +169,7 @@ export default function Onboarding() {
     const room = 4 - form.photos.length
     const picked = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, room)
     try {
-      const drafts = await Promise.all(picked.map((f) => resizeImage(f)))
+      const drafts = await Promise.all(picked.map((f) => preparePhoto(f)))
       up('photos', [...form.photos, ...drafts])
     } catch {
       toast('error', 'Could not read that image.')

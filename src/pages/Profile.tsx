@@ -45,7 +45,7 @@ function Gallery({ profile }: { profile: Profile }) {
           onDragEnd={onDragEnd}
           className="absolute inset-0 touch-pan-y"
         >
-          <ProfilePhoto profile={profile} index={i} className="pointer-events-none h-full w-full" />
+          <ProfilePhoto profile={profile} index={i} eager={i === 0} sizes="(min-width: 768px) 45vw, 100vw" className="pointer-events-none h-full w-full" />
         </motion.div>
       </AnimatePresence>
       {count > 1 && (
@@ -328,7 +328,7 @@ export default function ProfilePage() {
 
       <Modal open={confirm} onClose={() => setConfirm(false)} title="Send request">
         <div className="text-center">
-          <ProfilePhoto profile={profile} className="mx-auto h-24 w-24 rounded-3xl" />
+          <ProfilePhoto small profile={profile} className="mx-auto h-24 w-24 rounded-3xl" />
           <h2 className="mt-4 text-2xl font-bold">Shoot your shot with {profile.name.split(' ')[0]}?</h2>
           <p className="mt-2 text-white/60">If they accept, you get their socials. If they reject, you get popularity{me?.verified ? (s.phase === 1 ? ` and ${s.settings.rejectReward} $NERDY` : ' and a share of the monthly $NERDY pool') : ''}. You literally can’t lose.</p>
           {daily && (

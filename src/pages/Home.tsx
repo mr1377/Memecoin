@@ -105,7 +105,7 @@ function Hero() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="mt-8 flex items-center justify-center gap-3 lg:justify-start">
           <div className="flex -space-x-3">
             {faces.map((p) => (
-              <ProfilePhoto key={p.id} profile={p} className="h-10 w-10 rounded-full border-2 border-ink-900" />
+              <ProfilePhoto small key={p.id} profile={p} className="h-10 w-10 rounded-full border-2 border-ink-900" />
             ))}
           </div>
           <p className="text-left text-sm text-white/60">
@@ -526,7 +526,7 @@ function HallOfFame() {
             <li key={p.id}>
               <Link to={`/u/${p.id}`} className="group flex items-center gap-4 p-4 transition hover:bg-white/[0.03] sm:p-5">
                 <span className={clsx('w-6 text-center font-display text-2xl font-black', i === 0 ? 'text-carrot' : 'text-white/30')}>{i + 1}</span>
-                <ProfilePhoto profile={p} className="h-12 w-12 shrink-0 rounded-2xl" />
+                <ProfilePhoto small profile={p} className="h-12 w-12 shrink-0 rounded-2xl" />
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 font-semibold group-hover:text-carrot">
                     <span className="truncate">{p.name} {i === 0 && '👑'}</span>

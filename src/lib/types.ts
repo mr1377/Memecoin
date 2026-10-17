@@ -34,6 +34,7 @@ export interface Profile {
   bio: string
   interests: string[]
   photos: string[] // public URLs — empty means generated avatar
+  thumbs: string[] // small versions (same as photos for older uploads)
   photoPaths: string[] // storage paths backing `photos`
   avatar: AvatarSeed
   joinedAt: number

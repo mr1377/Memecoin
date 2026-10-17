@@ -43,7 +43,7 @@ export function TopNav() {
           <PhaseBadge className="hidden sm:flex" />
           {me ? (
             <Link to="/dashboard" className="h-10 w-10 overflow-hidden rounded-full border-2 border-carrot/80 transition hover:scale-105" aria-label="My dashboard">
-              <ProfilePhoto profile={me} className="h-full w-full" />
+              <ProfilePhoto small profile={me} className="h-full w-full" />
             </Link>
           ) : session ? (
             <Link to="/onboarding" className="btn-primary !px-4 !py-2 text-sm">Finish profile</Link>

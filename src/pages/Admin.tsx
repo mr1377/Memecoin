@@ -264,7 +264,7 @@ export default function Admin() {
             return (
               <li key={r.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                 <div className="flex items-start gap-3">
-                  {p && <ProfilePhoto profile={p} className="h-12 w-12 shrink-0 rounded-xl" />}
+                  {p && <ProfilePhoto small profile={p} className="h-12 w-12 shrink-0 rounded-xl" />}
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">
                       <Link to={`/u/${r.reported}`} className="hover:text-carrot">{name(r.reported)}</Link> <span className="chip ml-1 text-carrot">{r.reason}</span>
@@ -301,7 +301,7 @@ export default function Admin() {
         <ul className="divide-y divide-white/5">
           {residents.map((p) => (
             <li key={p.id} className="flex items-center gap-3 py-2">
-              <ProfilePhoto profile={p} className="h-10 w-10 shrink-0 rounded-xl" />
+              <ProfilePhoto small profile={p} className="h-10 w-10 shrink-0 rounded-xl" />
               <Link to={`/u/${p.id}`} className="min-w-0 flex-1 truncate font-semibold hover:text-carrot">
                 {p.name} <span className="font-normal text-white/40">· {p.city}</span>
               </Link>

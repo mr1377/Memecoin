@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Session, SolanaWallet } from '@supabase/supabase-js'
+import { photoPaths, storedFiles, thumbPath, type EncodedPhoto } from './photos'
 import { isConfigured, PHOTO_BUCKET, photoUrl, supabase } from './supabase'
 import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, RevenueStatus, Settings, Social } from './types'
 import { connectWallet, needsSecondTap, oneStepSignIn, shortAddress, type ConnectedWallet, type WalletOption } from './wallets'
@@ -106,6 +107,7 @@ function mapProfile(r: Row): Profile {
     interests: (r.interests as string[]) ?? [],
     photoPaths: paths,
     photos: paths.map(photoUrl),
+    thumbs: paths.map((p) => photoUrl(thumbPath(p) ?? p)),
     avatar: r.avatar as AvatarSeed,
     joinedAt: Date.parse(r.created_at as string),
     rejectionsGiven: r.rejections_given as number,
@@ -382,8 +384,11 @@ export interface ProfileInput {
   avatar: AvatarSeed
 }
 
-/** A photo in the editor: either already uploaded (path) or a new blob to upload. */
-export type PhotoDraft = { path: string; url: string } | { blob: Blob; url: string }
+/** A photo in the editor: either already uploaded (path) or a freshly encoded one to upload. */
+export type PhotoDraft = { path: string; url: string } | { photo: EncodedPhoto; url: string }
+
+/** Photos never change once uploaded (unique names), so browsers and the CDN may cache them for a year. */
+const PHOTO_CACHE = '31536000'
 
 const WALLET_STATEMENT = 'Sign in to Nerdy Town. I confirm I am 18 or older. This does not send a transaction or cost any fees.'
 
@@ -471,10 +476,12 @@ export const api = {
         paths.push(p.path)
         continue
       }
-      const path = `${me}/${crypto.randomUUID()}.jpg`
-      const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, p.blob, { contentType: 'image/jpeg', upsert: false })
-      if (error) throw new Error('Photo upload failed: ' + error.message)
-      paths.push(path)
+      const { full, thumb } = photoPaths(me, crypto.randomUUID(), p.photo.ext)
+      for (const [path, blob] of [[thumb, p.photo.thumb], [full, p.photo.full]] as const) {
+        const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: blob.type, cacheControl: PHOTO_CACHE, upsert: false })
+        if (error) throw new Error('Photo upload failed: ' + error.message)
+      }
+      paths.push(full)
     }
 
     const row = {
@@ -496,7 +503,7 @@ export const api = {
     unwrap(await supabase.from('contacts').upsert({ user_id: me, socials, updated_at: new Date().toISOString() }).select())
 
     const removed = (existing?.photoPaths ?? []).filter((p) => !paths.includes(p))
-    if (removed.length) await supabase.storage.from(PHOTO_BUCKET).remove(removed)
+    if (removed.length) await supabase.storage.from(PHOTO_BUCKET).remove(storedFiles(removed))
 
     await loadMine()
     await loadPublic()
@@ -580,8 +587,8 @@ export const api = {
     const me = state.session
     if (!me) return
     const paths = state.profiles[me]?.photoPaths ?? []
-    if (paths.length) await supabase.storage.from(PHOTO_BUCKET).remove(paths)
     unwrap(await supabase.rpc('delete_my_account'))
+    if (paths.length) await supabase.storage.from(PHOTO_BUCKET).remove(storedFiles(paths))
     await supabase.auth.signOut()
     await applySession(null)
     await loadPublic()
@@ -652,7 +659,10 @@ export const api = {
       await refreshProfiles([userId])
     },
     async removeProfile(userId: string) {
+      const paths = state.profiles[userId]?.photoPaths ?? []
       unwrap(await supabase.rpc('admin_remove_user', { p_user: userId }))
+      // Free their storage too (admins may delete any photo).
+      if (paths.length) await supabase.storage.from(PHOTO_BUCKET).remove(storedFiles(paths))
       set((s) => {
         const profiles = { ...s.profiles }
         delete profiles[userId]

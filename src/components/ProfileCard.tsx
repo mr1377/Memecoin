@@ -54,7 +54,7 @@ export default function ProfileCard({ profile, relation, me, index = 0 }: { prof
           aria-label={`${profile.name}, ${profile.age}. ${profile.tagline}`}
         >
           <div className="relative aspect-[3/4] overflow-hidden">
-            <ProfilePhoto profile={profile} className="h-full w-full transition-transform duration-500 group-hover:scale-105" />
+            <ProfilePhoto profile={profile} sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" className="h-full w-full transition-transform duration-500 group-hover:scale-105" />
             <motion.div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: shine }} />
             <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-ink-950 via-ink-950/70 to-transparent" />
 

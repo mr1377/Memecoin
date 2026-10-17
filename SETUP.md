@@ -21,6 +21,7 @@ About 20 minutes. You need a free [Supabase](https://supabase.com) account, a fr
 >
 > - `003_earn_when_verified.sql`: everyone can send / answer requests; only verified residents earn (20 $NERDY per rejection in Phase 1); withdrawals 14 days after verifying; lock 2000 $NERDY.
 > - `004_token_and_price.sql`: sets the $NERDY token address (`8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx`) and makes extra requests cost 10 $NERDY.
+> - `005_photo_storage.sql`: caps photo uploads at 400 KB (the site already shrinks photos to ~200 KB + a ~30 KB thumbnail) and lets admins delete the photos of removed users.
 >
 > 002 deletes all NPCs and their requests, recomputes everyone's counters from real interactions, clears old verified badges and puts the site back in Phase 1. Accounts made with email + password can't log in anymore (see step 5 to become admin again).
 

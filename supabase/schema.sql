@@ -736,10 +736,12 @@ revoke insert, update, delete on public.requests, public.ledger, public.daily_us
 
 -- ---------------------------------------------------------------------
 -- Photo storage: public bucket, users write only to their own folder.
+-- The site shrinks photos before upload (~200 KB full + ~30 KB thumbnail),
+-- and the 400 KB limit stops anyone uploading bigger files around it.
 -- ---------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('photos', 'photos', true, 3145728, array['image/jpeg', 'image/png', 'image/webp'])
-on conflict (id) do nothing;
+values ('photos', 'photos', true, 409600, array['image/jpeg', 'image/webp'])
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 create policy photos_insert on storage.objects for insert to authenticated
   with check (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
@@ -747,6 +749,9 @@ create policy photos_update on storage.objects for update to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy photos_delete on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+-- Admins can delete the photos of residents they remove.
+create policy photos_admin_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'photos' and public.is_admin());
 
 -- ---------------------------------------------------------------------
 -- Realtime: live updates for requests (RLS still applies).
