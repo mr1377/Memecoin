@@ -207,7 +207,7 @@ function PointsCard({ onShare }: { onShare: () => void }) {
   const me = useStore(selectMe)
   const pts = useStore((s) => s.points)
   const wallet = useStore((s) => s.wallet)
-  const { pointsReject, pointsAccept, pointsInvite } = useStore((s) => s.settings)
+  const { pointsReject, pointsInvite } = useStore((s) => s.settings)
   const toast = useToast()
   const link = me?.inviteCode ? inviteLink(me.inviteCode) : ''
   const copy = () => navigator.clipboard?.writeText(link).then(() => toast('success', 'Invite link copied', `+${pointsInvite} points for every friend who joins and takes part.`))
@@ -230,10 +230,9 @@ function PointsCard({ onShare }: { onShare: () => void }) {
         <p className="mt-3 flex items-center gap-2 rounded-xl border border-carrot/30 bg-carrot/10 px-3 py-2 text-sm font-semibold text-carrot">
           <Sparkles className="h-4 w-4 shrink-0" /> Points convert to $NERDY after launch.
         </p>
-        <ul className="mt-4 grid grid-cols-3 gap-2 text-center">
+        <ul className="mt-4 grid grid-cols-2 gap-2 text-center">
           {[
             ['Rejected', `+${pointsReject}`, 'text-rizz'],
-            ['Accepted', `+${pointsAccept}`, 'text-lime'],
             ['Friend joins', `+${pointsInvite}`, 'text-byte'],
           ].map(([k, v, tone]) => (
             <li key={k} className="rounded-xl border border-white/10 bg-white/[0.03] p-2">

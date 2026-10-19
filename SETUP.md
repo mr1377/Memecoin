@@ -22,7 +22,8 @@ About 20 minutes. You need a free [Supabase](https://supabase.com) account, a fr
 > - `003_earn_when_verified.sql`: everyone can send / answer requests; only verified residents earn (20 $NERDY per rejection in Phase 1); withdrawals 14 days after verifying; lock 2000 $NERDY.
 > - `004_token_and_price.sql`: sets the $NERDY token address (`8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx`) and makes extra requests cost 10 $NERDY.
 > - `005_photo_storage.sql`: caps photo uploads at 400 KB (the site already shrinks photos to ~200 KB + a ~30 KB thumbnail) and lets admins delete the photos of removed users.
-> - `006_points_season.sql`: points season. Clears the token address (every token feature hides), adds points (+10 rejected, +25 accepted, +50 per invited friend), invite links and weekly leaderboards. Past rejections and matches are counted as points.
+> - `006_points_season.sql`: points season. Clears the token address (every token feature hides), adds points (+10 rejected, +50 per invited friend; the +25 for accepted it also added is removed again by 007), invite links and weekly leaderboards. Past rejections and matches are counted as points.
+> - `007_no_points_for_matches.sql`: an accepted request earns no points (removes match points already given). Only rejections (+10) and invited friends (+50) earn points.
 >
 > 002 deletes all NPCs and their requests, recomputes everyone's counters from real interactions, clears old verified badges and puts the site back in Phase 1. Accounts made with email + password can't log in anymore (see step 5 to become admin again).
 
@@ -82,7 +83,7 @@ What users see on the login page:
 While **Admin → $NERDY token mint address** is empty, the site runs on points only:
 
 - No contract address, no buy buttons, no verification / lock, no balances or withdrawals. The site says **“$NERDY is coming soon. Start stacking points now.”**
-- **Points:** +10 when someone rejects your request, +25 when they accept, +50 for every friend who joins through your invite link *and* sends or answers their first request. Change the numbers in the Admin panel.
+- **Points:** +10 when someone rejects your request (an accepted request earns no points), +50 for every friend who joins through your invite link *and* sends or answers their first request. Change the numbers in the Admin panel.
 - The dashboard says **“Points convert to $NERDY after launch.”** No rate is promised, so you decide it at launch.
 - **Leaderboard** (`/leaderboard`): most rejected and top points over the last 7 days, plus all-time points.
 - **Invite link** on every dashboard (`nerdytown.space/?ref=<code>`).

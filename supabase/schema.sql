@@ -25,7 +25,6 @@ create table public.settings (
   withdraw_wait_days int not null default 14 check (withdraw_wait_days between 0 and 365),
   -- Points (before $NERDY launches; they convert after launch at a rate set then).
   points_reject int not null default 10 check (points_reject between 0 and 10000),
-  points_accept int not null default 25 check (points_accept between 0 and 10000),
   points_invite int not null default 50 check (points_invite between 0 and 10000),
   -- Phase 2 starts by itself once this many VERIFIED residents exist. It never goes back.
   real_user_goal int not null default 1000 check (real_user_goal between 1 and 1000000),
@@ -247,12 +246,12 @@ create table public.locks (
 );
 create index locks_user_idx on public.locks (user_id);
 
--- Points: earned by being rejected, being accepted and inviting friends. Written only
+-- Points: earned by being rejected and by inviting friends (being accepted earns none). Written only
 -- by the database (one row per request / invitee, so nothing can be counted twice).
 create table public.points (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
-  kind text not null check (kind in ('rejected', 'accepted', 'invite', 'adjustment')),
+  kind text not null check (kind in ('rejected', 'invite', 'adjustment')),
   amount int not null,
   ref uuid,
   created_at timestamptz not null default now()
@@ -374,10 +373,9 @@ begin
   end if;
 
   select * into s from public.settings where id = 1;
-  -- Points for the person who shot their shot: more for a match, some for an L.
-  if (case when p_status = 'accepted' then s.points_accept else s.points_reject end) > 0 then
-    insert into public.points (user_id, kind, amount, ref)
-    values (r.from_id, p_status, case when p_status = 'accepted' then s.points_accept else s.points_reject end, r.id)
+  -- Points for the person who got rejected (an accepted request earns no points).
+  if p_status = 'rejected' and s.points_reject > 0 then
+    insert into public.points (user_id, kind, amount, ref) values (r.from_id, 'rejected', s.points_reject, r.id)
     on conflict do nothing;
   end if;
 

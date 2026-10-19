@@ -123,7 +123,6 @@ export default function Admin() {
           </div>
           <NumField label="Free requests per day" value={form.freeDailyRequests} onChange={(v) => setForm({ ...form, freeDailyRequests: v })} />
           <NumField label="Points per rejection" value={form.pointsReject} onChange={(v) => setForm({ ...form, pointsReject: Math.max(0, Math.round(v)) })} hint="For the resident who got rejected." />
-          <NumField label="Points per match" value={form.pointsAccept} onChange={(v) => setForm({ ...form, pointsAccept: Math.max(0, Math.round(v)) })} hint="For the resident whose request was accepted." />
           <NumField label="Points per invited friend" value={form.pointsInvite} onChange={(v) => setForm({ ...form, pointsInvite: Math.max(0, Math.round(v)) })} hint="Counted once the friend sends or answers their first request." />
           <NumField
             label="Verified residents for Phase 2"

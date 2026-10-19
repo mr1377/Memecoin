@@ -94,7 +94,6 @@ export interface Settings {
   withdrawWaitDays: number
   /** Points (points season, before $NERDY launches). */
   pointsReject: number
-  pointsAccept: number
   pointsInvite: number
   extraRequestCost: number
   minWithdraw: number

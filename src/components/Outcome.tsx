@@ -26,7 +26,7 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
   const socials = useStore((s) => s.contacts[other.id])
   const reward = useStore((s) => s.settings.rejectReward)
   const tokenLive = useStore((s) => !!s.settings.tokenMint)
-  const { pointsReject, pointsAccept } = useStore((s) => s.settings)
+  const pointsReject = useStore((s) => s.settings.pointsReject)
   // Only verified residents earn: Phase 1 a fixed reward, Phase 2 a share of the monthly pool.
   const paid = !!me.verified
   useEffect(() => {
@@ -64,11 +64,6 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
               {other.name.split(' ')[0]} said <span className="text-lime">yes!</span>
             </h2>
             <p className="mt-2 text-white/60">Their socials are yours. Slide in. Be cool. (You won’t be. That’s fine.)</p>
-            {pointsAccept > 0 && (
-              <p className="mx-auto mt-4 inline-flex items-center gap-1.5 rounded-full border border-lime/40 bg-lime/10 px-3 py-1 font-mono text-sm font-bold text-lime">
-                <Sparkles className="h-4 w-4" /> +{pointsAccept} points
-              </p>
-            )}
             {socials ? (
               <SocialsReveal socials={socials} className="mt-6 text-left" />
             ) : (

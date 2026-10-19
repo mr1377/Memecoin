@@ -205,7 +205,7 @@ function Marquee() {
 function WinWinDemo() {
   const REWARD = useStore((s) => s.settings.rejectReward)
   const live = useStore((s) => !!s.settings.tokenMint)
-  const { pointsReject: PR, pointsAccept: PA } = useStore((s) => s.settings)
+  const PR = useStore((s) => s.settings.pointsReject)
   const [pts, setPts] = useState(0)
   const [state, setState] = useState<'idle' | 'sending' | 'accepted' | 'rejected'>('idle')
   const [pop, setPop] = useState(41)
@@ -223,7 +223,6 @@ function WinWinDemo() {
       const r = btn.current?.getBoundingClientRect()
       const at = r ? { x: r.left + r.width / 2, y: r.top } : {}
       if (outcome === 'accepted') {
-        setPts((p) => p + PA)
         confetti({ ...at, emoji: ['💬', '💘', '🤓'] })
       } else {
         setPop((p) => p + 1)
@@ -353,7 +352,7 @@ function WinWinDemo() {
           <ul className="mt-5 space-y-2 text-sm">
             {(live
               ? ['+1 public popularity, always', `Verified, Phase 1: +${REWARD} $NERDY`, 'Verified, Phase 2: +1 share of the monthly pool', 'Withdraw to your wallet']
-              : ['+1 public popularity', `+${PR} points (+${PA} if they say yes)`, 'Climb the weekly leaderboard', 'Points convert to $NERDY after launch']
+              : ['+1 public popularity', `+${PR} points every time`, 'Climb the weekly leaderboard', 'Points convert to $NERDY after launch']
             ).map((t) => (
               <li key={t} className="flex items-center gap-2 text-white/80">
                 <Check className="h-4 w-4 text-rizz" /> {t}
@@ -369,13 +368,13 @@ function WinWinDemo() {
 // ------------------------------------------------------------------ HOW IT WORKS
 
 function HowItWorks() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, rejectReward: REWARD, pointsReject: PR, pointsAccept: PA, pointsInvite: PI } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, rejectReward: REWARD, pointsReject: PR, pointsInvite: PI } = useStore((s) => s.settings)
   const live = useStore((s) => !!s.settings.tokenMint)
   const steps = [
     { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign in with Google, X, email or a Solana wallet. Add a photo (or generate your inner nerd), a bio and your interests. Your socials stay locked.', color: 'from-grape to-byte' },
     { icon: Send, title: 'Send partner requests', body: live
         ? `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Lock ${LOCK.toLocaleString()} $NERDY to get verified and every rejection pays ${REWARD} $NERDY.`
-        : `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Every rejection is +${PR} points, every match +${PA}, every friend you bring +${PI}.`, color: 'from-carrot to-rizz' },
+        : `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Every rejection is +${PR} points and every friend you bring +${PI}.`, color: 'from-carrot to-rizz' },
     { icon: Crown, title: 'Win. Either way.', body: live ? 'Accepted → you get their socials. Rejected → you get popularity now, and a cut of the platform’s revenue in Phase 2.' : 'Accepted → you get their socials. Rejected → popularity and points. Points convert to $NERDY after launch.', color: 'from-lime to-byte' },
   ]
   return (
@@ -413,7 +412,7 @@ function Roadmap() {
   const phase = useStore((s) => s.phase)
   const verified = useStore((s) => s.stats.verified)
   const tokenMint = useStore((s) => s.settings.tokenMint)
-  const { pointsReject: PR, pointsAccept: PA, pointsInvite: PI } = useStore((s) => s.settings)
+  const { pointsReject: PR, pointsInvite: PI } = useStore((s) => s.settings)
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const line = useTransform(scrollYProgress, [0.15, 0.6], ['0%', '100%'])
@@ -424,7 +423,7 @@ function Roadmap() {
       n: 1,
       title: 'Points season',
       sub: 'Live now · free for everyone',
-      points: [`${FREE_DAILY_REQUESTS} free partner requests a day`, `+${PR} points for every rejection`, `+${PA} points for every match`, `+${PI} points for every friend you bring`],
+      points: [`${FREE_DAILY_REQUESTS} free partner requests a day`, `+${PR} points for every rejection`, `+${PI} points for every friend you bring`, 'Climb the weekly leaderboard'],
       icon: Sparkles,
     },
     {
@@ -620,12 +619,12 @@ function HallOfFame() {
 // ------------------------------------------------------------------ FAQ
 
 function FAQ() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD, withdrawWaitDays: WAIT, pointsReject: PR, pointsAccept: PA, pointsInvite: PI } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD, withdrawWaitDays: WAIT, pointsReject: PR, pointsInvite: PI } = useStore((s) => s.settings)
   const live = useStore((s) => !!s.settings.tokenMint)
   const season = [
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
     ['Is it free?', `Yes. Everyone gets ${FREE_DAILY_REQUESTS} free partner requests a day, reset at midnight UTC. No wallet balance, no token needed.`],
-    ['How do I earn points?', `+${PR} every time someone rejects your request, +${PA} when they accept, and +${PI} for every friend who joins through your invite link and sends or answers their first request.`],
+    ['How do I earn points?', `+${PR} every time someone rejects your request, and +${PI} for every friend who joins through your invite link and sends or answers their first request.`],
     ['What are points worth?', 'Points convert to $NERDY after launch. The conversion is announced at launch, so stack them now. Farming with fake accounts gets points removed.'],
     ['When does $NERDY launch?', 'Soon. Follow @nerdy_town on X for the date. Your points are safe until then.'],
     ['How do I invite friends?', 'Your invite link is on your dashboard. Share it (or your weekly brag card). A friend counts once they join and take part.'],

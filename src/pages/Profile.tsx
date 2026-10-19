@@ -332,7 +332,7 @@ export default function ProfilePage() {
           <h2 className="mt-4 text-2xl font-bold">Shoot your shot with {profile.name.split(' ')[0]}?</h2>
           <p className="mt-2 text-white/60">
             {!s.settings.tokenMint
-              ? `If they accept, you get their socials and +${s.settings.pointsAccept} points. If they reject, you get popularity and +${s.settings.pointsReject} points. You literally can’t lose.`
+              ? `If they accept, you get their socials. If they reject, you get popularity and +${s.settings.pointsReject} points. You literally can’t lose.`
               : `If they accept, you get their socials. If they reject, you get popularity${me?.verified ? (s.phase === 1 ? ` and ${s.settings.rejectReward} $NERDY` : ' and a share of the monthly $NERDY pool') : ''}. You literally can’t lose.`}
           </p>
           {daily && (
