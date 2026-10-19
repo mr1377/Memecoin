@@ -9,6 +9,7 @@ import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import Explore from './pages/Explore'
 import Home from './pages/Home'
+import Leaderboard from './pages/Leaderboard'
 import NotFound from './pages/NotFound'
 import Onboarding from './pages/Onboarding'
 import ProfilePage from './pages/Profile'
@@ -40,6 +41,7 @@ export default function App() {
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Home />} />
           <Route path="/explore" element={<Explore />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/u/:id" element={<ProfilePage />} />
           <Route path="/login" element={<Auth mode="login" />} />
           <Route path="/signup" element={<Auth mode="signup" />} />

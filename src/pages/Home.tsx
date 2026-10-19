@@ -42,6 +42,8 @@ function Hero() {
   const profiles = useStore((s) => s.profiles)
   const stats = useStore((s) => s.stats)
   const REWARD = useStore((s) => s.settings.rejectReward)
+  const live = useStore((s) => !!s.settings.tokenMint)
+  const PR = useStore((s) => s.settings.pointsReject)
   // Verified residents first in the avatar stack.
   const faces = useMemo(() => Object.values(profiles).sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0)).slice(0, 5), [profiles])
   const mxRaw = useMotionValue(0)
@@ -90,7 +92,15 @@ function Hero() {
         </motion.h1>
 
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mx-auto mt-8 max-w-xl text-lg text-white/70 lg:mx-0">
-          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs — and once you’re verified, every L pays you <b className="text-carrot">{REWARD} $NERDY</b>.
+          Send a partner request to anyone in town. They <b className="text-lime">accept</b>? You get their socials. They <b className="text-rizz">reject</b>? Your popularity climbs{live ? (
+            <>
+              {' '}— and once you’re verified, every L pays you <b className="text-carrot">{REWARD} $NERDY</b>.
+            </>
+          ) : (
+            <>
+              {' '}and every L earns you <b className="text-carrot">{PR} points</b> that turn into $NERDY at launch.
+            </>
+          )}
         </motion.p>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
@@ -154,7 +164,7 @@ function Hero() {
         </FloatCard>
         <FloatCard depth={0.8} mx={mx} my={my} className="bottom-[4%] left-[8%] [&>div]:[animation-delay:-3.5s]">
           <div className="flex items-center gap-2 rounded-full border-2 border-ink-950 bg-carrot px-3 py-1.5 font-mono text-sm font-bold text-ink-950 shadow-pop">
-            <Coins className="h-4 w-4" /> +{REWARD} $NERDY
+            <Coins className="h-4 w-4" /> {live ? `+${REWARD} $NERDY` : `+${PR} points`}
           </div>
         </FloatCard>
         <FloatCard depth={-0.6} mx={mx} my={my} className="right-[6%] top-[2%] [&>div]:[animation-delay:-1s]">
@@ -170,7 +180,10 @@ function Hero() {
 // ------------------------------------------------------------------ MARQUEE
 
 function Marquee() {
-  const items = ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Verified Ls pay $NERDY', 'Glasses on. Fear off.']
+  const live = useStore((s) => !!s.settings.tokenMint)
+  const items = live
+    ? ['Nerds always win', 'Get rejected → get popular', 'Get accepted → get the socials', '$NERDY', '3 free shots a day', 'Verified Ls pay $NERDY', 'Glasses on. Fear off.']
+    : ['Nerds always win', 'Get rejected → get points', 'Get accepted → get the socials', '$NERDY coming soon', '3 free shots a day', 'Stack points now', 'Glasses on. Fear off.']
   const row = [...items, ...items]
   return (
     <div className="overflow-hidden py-8">
@@ -191,6 +204,9 @@ function Marquee() {
 
 function WinWinDemo() {
   const REWARD = useStore((s) => s.settings.rejectReward)
+  const live = useStore((s) => !!s.settings.tokenMint)
+  const { pointsReject: PR, pointsAccept: PA } = useStore((s) => s.settings)
+  const [pts, setPts] = useState(0)
   const [state, setState] = useState<'idle' | 'sending' | 'accepted' | 'rejected'>('idle')
   const [pop, setPop] = useState(41)
   const [tokens, setTokens] = useState(0)
@@ -206,9 +222,12 @@ function WinWinDemo() {
       setState(outcome)
       const r = btn.current?.getBoundingClientRect()
       const at = r ? { x: r.left + r.width / 2, y: r.top } : {}
-      if (outcome === 'accepted') confetti({ ...at, emoji: ['💬', '💘', '🤓'] })
-      else {
+      if (outcome === 'accepted') {
+        setPts((p) => p + PA)
+        confetti({ ...at, emoji: ['💬', '💘', '🤓'] })
+      } else {
         setPop((p) => p + 1)
+        setPts((p) => p + PR)
         if (phase2) setShares((t) => t + 1)
         else setTokens((t) => t + REWARD)
         confetti({ ...at, colors: ['#ff4d8d', '#ff7a1a', '#8b5cf6'], count: 70, emoji: ['🏆', '🤓'] })
@@ -284,7 +303,7 @@ function WinWinDemo() {
                   ) : state === 'rejected' ? (
                     <motion.div key="r" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="rounded-2xl border border-rizz/30 bg-rizz/10 p-3 text-center">
                       <p className="text-xs font-semibold uppercase text-rizz">L converted to W</p>
-                      <p className="font-display text-lg font-bold">Popularity {pop} <span className="text-carrot">· {phase2 ? `${shares} share${shares === 1 ? '' : 's'}` : `${tokens} $NERDY`}</span></p>
+                      <p className="font-display text-lg font-bold">Popularity {pop} <span className="text-carrot">· {!live ? `${pts} points` : phase2 ? `${shares} share${shares === 1 ? '' : 's'}` : `${tokens} $NERDY`}</span></p>
                     </motion.div>
                   ) : (
                     <motion.div key="i" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center text-sm text-white/60">
@@ -319,7 +338,7 @@ function WinWinDemo() {
             <span className="text-white/50">Rig it:</span>
             <button onClick={() => state !== 'sending' && send('accepted')} className="chip hover:border-lime/50">Accept</button>
             <button onClick={() => state !== 'sending' && send('rejected')} className="chip hover:border-rizz/50">Reject</button>
-            <button onClick={() => setPhase2(!phase2)} className={clsx('chip', phase2 && 'border-carrot/60 text-carrot')}>Phase {phase2 ? 2 : 1}</button>
+            {live && <button onClick={() => setPhase2(!phase2)} className={clsx('chip', phase2 && 'border-carrot/60 text-carrot')}>Phase {phase2 ? 2 : 1}</button>}
           </div>
         </motion.div>
 
@@ -332,7 +351,10 @@ function WinWinDemo() {
           </div>
           <p className="mt-3 text-white/60">Congrats, it’s logged on your dashboard. Rejections are clout here — the more you shoot, the more popular you get.</p>
           <ul className="mt-5 space-y-2 text-sm">
-            {['+1 public popularity, always', `Verified, Phase 1: +${REWARD} $NERDY`, 'Verified, Phase 2: +1 share of the monthly pool', 'Withdraw to your wallet'].map((t) => (
+            {(live
+              ? ['+1 public popularity, always', `Verified, Phase 1: +${REWARD} $NERDY`, 'Verified, Phase 2: +1 share of the monthly pool', 'Withdraw to your wallet']
+              : ['+1 public popularity', `+${PR} points (+${PA} if they say yes)`, 'Climb the weekly leaderboard', 'Points convert to $NERDY after launch']
+            ).map((t) => (
               <li key={t} className="flex items-center gap-2 text-white/80">
                 <Check className="h-4 w-4 text-rizz" /> {t}
               </li>
@@ -347,11 +369,14 @@ function WinWinDemo() {
 // ------------------------------------------------------------------ HOW IT WORKS
 
 function HowItWorks() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, rejectReward: REWARD } = useStore((s) => s.settings)
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, verifyLockAmount: LOCK, rejectReward: REWARD, pointsReject: PR, pointsAccept: PA, pointsInvite: PI } = useStore((s) => s.settings)
+  const live = useStore((s) => !!s.settings.tokenMint)
   const steps = [
     { icon: UserPlus, title: 'Create your nerd profile', body: 'Sign in with Google, X, email or a Solana wallet. Add a photo (or generate your inner nerd), a bio and your interests. Your socials stay locked.', color: 'from-grape to-byte' },
-    { icon: Send, title: 'Send partner requests', body: `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Lock ${LOCK.toLocaleString()} $NERDY to get verified and every rejection pays ${REWARD} $NERDY.`, color: 'from-carrot to-rizz' },
-    { icon: Crown, title: 'Win. Either way.', body: 'Accepted → you get their socials. Rejected → you get popularity now, and a cut of the platform’s revenue in Phase 2.', color: 'from-lime to-byte' },
+    { icon: Send, title: 'Send partner requests', body: live
+        ? `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Lock ${LOCK.toLocaleString()} $NERDY to get verified and every rejection pays ${REWARD} $NERDY.`
+        : `Browse the town and shoot your shot: ${FREE_DAILY_REQUESTS} free requests a day. Every rejection is +${PR} points, every match +${PA}, every friend you bring +${PI}.`, color: 'from-carrot to-rizz' },
+    { icon: Crown, title: 'Win. Either way.', body: live ? 'Accepted → you get their socials. Rejected → you get popularity now, and a cut of the platform’s revenue in Phase 2.' : 'Accepted → you get their socials. Rejected → popularity and points. Points convert to $NERDY after launch.', color: 'from-lime to-byte' },
   ]
   return (
     <section className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6">
@@ -388,11 +413,29 @@ function Roadmap() {
   const phase = useStore((s) => s.phase)
   const verified = useStore((s) => s.stats.verified)
   const tokenMint = useStore((s) => s.settings.tokenMint)
+  const { pointsReject: PR, pointsAccept: PA, pointsInvite: PI } = useStore((s) => s.settings)
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const line = useTransform(scrollYProgress, [0.15, 0.6], ['0%', '100%'])
 
-  const phases = [
+  // Points season (no token yet): stack points now, they convert at launch.
+  const season = [
+    {
+      n: 1,
+      title: 'Points season',
+      sub: 'Live now · free for everyone',
+      points: [`${FREE_DAILY_REQUESTS} free partner requests a day`, `+${PR} points for every rejection`, `+${PA} points for every match`, `+${PI} points for every friend you bring`],
+      icon: Sparkles,
+    },
+    {
+      n: 2,
+      title: '$NERDY launch',
+      sub: 'Coming soon',
+      points: ['Your points convert to $NERDY', 'Verified badge for earning residents', 'Token payouts to your wallet', 'Monthly revenue share later on'],
+      icon: Rocket,
+    },
+  ]
+  const phases = !tokenMint ? season : [
     {
       n: 1,
       title: 'Build the town',
@@ -412,10 +455,31 @@ function Roadmap() {
     <section id="roadmap" ref={ref} className="relative mx-auto max-w-7xl scroll-mt-20 px-4 py-24 sm:px-6">
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <Eyebrow>Roadmap</Eyebrow>
-        <h2 className="mt-4 text-4xl font-extrabold sm:text-6xl">Two phases. One token.</h2>
-        <p className="mt-5 text-white/60">Profiles, requests, accept/reject and socials reveals work the same in both phases. Phase 2 just turns your Ls into money.</p>
+        <h2 className="mt-4 text-4xl font-extrabold sm:text-6xl">{tokenMint ? 'Two phases. One token.' : 'Points now. $NERDY next.'}</h2>
+        <p className="mt-5 text-white/60">
+          {tokenMint ? 'Profiles, requests, accept/reject and socials reveals work the same in both phases. Phase 2 just turns your Ls into money.' : 'Everything works today and it’s free. Every L, every match and every friend you bring stacks points for launch day.'}
+        </p>
       </motion.div>
 
+      {!tokenMint ? (
+        <motion.div {...reveal} className="relative mx-auto mt-12 max-w-3xl overflow-hidden rounded-[2rem] border-2 border-ink-950 bg-gradient-to-br from-carrot via-rizz to-grape p-[2px] shadow-pop-lg">
+          <div className="rounded-[1.9rem] bg-ink-900/90 p-6 text-center sm:p-8">
+            <span className="inline-flex items-center gap-2 rounded-full bg-carrot px-3 py-1 font-mono text-[11px] font-bold uppercase text-ink-950">
+              <Sparkles className="h-3.5 w-3.5" /> $NERDY coming soon
+            </span>
+            <p className="mt-4 font-display text-3xl font-extrabold sm:text-4xl">Start stacking points now.</p>
+            <p className="mx-auto mt-2 max-w-md text-white/60">Points convert to $NERDY after launch. The earlier you start, the bigger your stack.</p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Link to="/signup" className="btn-primary">
+                Start earning <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/leaderboard" className="btn-ghost">
+                <Trophy className="h-4 w-4" /> Leaderboard
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      ) : (
       <motion.div {...reveal} className="card mx-auto mt-12 max-w-3xl p-6">
         <div className="flex items-center justify-between text-sm">
           <span className="font-mono text-white/60">Verified residents</span>
@@ -446,13 +510,14 @@ function Roadmap() {
           </div>
         )}
       </motion.div>
+      )}
 
       <div className="relative mt-16 grid gap-6 md:grid-cols-2">
         <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-white/10 md:block">
           <motion.div style={{ height: line }} className="w-px bg-gradient-to-b from-grape to-lime" />
         </div>
         {phases.map((p, i) => {
-          const live = phase === p.n
+          const live = tokenMint ? phase === p.n : p.n === 1
           return (
             <motion.div key={p.n} {...reveal} transition={{ ...reveal.transition, delay: i * 0.15 }} className={clsx('card relative p-7', live && 'ring-2 ring-carrot/60')}>
               {live && <span className="absolute -top-3 left-7 rounded-full border-2 border-ink-950 bg-carrot px-3 py-0.5 font-mono text-[11px] font-bold uppercase text-ink-950 shadow-pop">Live now</span>}
@@ -461,7 +526,7 @@ function Roadmap() {
                   <p.icon className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-white/40">Phase {p.n}</p>
+                  <p className="font-mono text-xs uppercase tracking-widest text-white/40">{tokenMint ? `Phase ${p.n}` : `Step ${p.n}`}</p>
                   <h3 className="text-2xl font-bold">{p.title}</h3>
                 </div>
               </div>
@@ -480,11 +545,18 @@ function Roadmap() {
       </div>
 
       <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-5">
-        {[
-          { k: 'Free daily requests', v: FREE_DAILY_REQUESTS, s: '' },
-          { k: 'Residents to Phase 2', v: GOAL, s: '' },
-          { k: 'Extra request (P2)', v: EXTRA_REQUEST_COST, s: ' $N' },
-        ].map((x) => (
+        {(tokenMint
+          ? [
+              { k: 'Free daily requests', v: FREE_DAILY_REQUESTS, s: '' },
+              { k: 'Residents to Phase 2', v: GOAL, s: '' },
+              { k: 'Extra request (P2)', v: EXTRA_REQUEST_COST, s: ' $N' },
+            ]
+          : [
+              { k: 'Free daily requests', v: FREE_DAILY_REQUESTS, s: '' },
+              { k: 'Points per rejection', v: PR, s: '' },
+              { k: 'Points per friend', v: PI, s: '' },
+            ]
+        ).map((x) => (
           <motion.div {...reveal} key={x.k} className="card p-4 text-center sm:p-6">
             <p className="font-display text-3xl font-extrabold text-carrot sm:text-5xl">
               <AnimatedNumber value={x.v} suffix={x.s} />
@@ -510,8 +582,8 @@ function HallOfFame() {
           <Eyebrow>Hall of Fame</Eyebrow>
           <h2 className="mt-4 text-4xl font-extrabold sm:text-6xl">The most rejected legends.</h2>
           <p className="mt-5 max-w-md text-white/60">Elsewhere, rejection is a secret. In Nerdy Town it’s a scoreboard. These heroes shot their shot more than anyone — and it shows.</p>
-          <Link to="/explore?f=popular" className="btn-dark mt-8">
-            See the popular kids <ArrowRight className="h-4 w-4" />
+          <Link to="/leaderboard" className="btn-dark mt-8">
+            <Trophy className="h-4 w-4" /> Weekly leaderboard <ArrowRight className="h-4 w-4" />
           </Link>
         </motion.div>
         <motion.ol {...reveal} className="card divide-y divide-white/5 overflow-hidden">
@@ -548,8 +620,18 @@ function HallOfFame() {
 // ------------------------------------------------------------------ FAQ
 
 function FAQ() {
-  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD, withdrawWaitDays: WAIT } = useStore((s) => s.settings)
-  const qs = [
+  const { freeDailyRequests: FREE_DAILY_REQUESTS, realUserGoal: GOAL, verifyLockAmount: LOCK, rejectReward: REWARD, withdrawWaitDays: WAIT, pointsReject: PR, pointsAccept: PA, pointsInvite: PI } = useStore((s) => s.settings)
+  const live = useStore((s) => !!s.settings.tokenMint)
+  const season = [
+    ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
+    ['Is it free?', `Yes. Everyone gets ${FREE_DAILY_REQUESTS} free partner requests a day, reset at midnight UTC. No wallet balance, no token needed.`],
+    ['How do I earn points?', `+${PR} every time someone rejects your request, +${PA} when they accept, and +${PI} for every friend who joins through your invite link and sends or answers their first request.`],
+    ['What are points worth?', 'Points convert to $NERDY after launch. The conversion is announced at launch, so stack them now. Farming with fake accounts gets points removed.'],
+    ['When does $NERDY launch?', 'Soon. Follow @nerdy_town on X for the date. Your points are safe until then.'],
+    ['How do I invite friends?', 'Your invite link is on your dashboard. Share it (or your weekly brag card). A friend counts once they join and take part.'],
+    ['How do I sign up?', 'Tap “Continue with Google, X or email”, or use a Solana wallet like Phantom, Solflare or Trust. No password needed.'],
+  ]
+  const qs = !live ? season : [
     ['Are my socials public?', 'Never. Your socials are locked until you personally accept someone’s request. Only that one person sees them.'],
     ['What happens when I get rejected?', `It’s logged on your dashboard and your public popularity goes up by one. If you’re verified, it also pays: ${REWARD} $NERDY in Phase 1, a share of that month’s revenue pool in Phase 2.`],
     ['How many requests can I send?', `${FREE_DAILY_REQUESTS} free requests per day, reset at midnight UTC. In Phase 2 you can buy more with $NERDY.`],
@@ -629,7 +711,7 @@ export function Footer() {
           <p className="font-display text-lg font-bold text-white">
             Nerdy<span className="text-carrot">Town</span>
           </p>
-          <p className="mt-2">$NERDY is a meme coin with no intrinsic value or expectation of financial return. Not financial advice. Be kind — every nerd here is somebody’s favorite nerd.</p>
+          <p className="mt-2">$NERDY is coming soon. Start stacking points now. Points are rewards in Nerdy Town; $NERDY will be a meme coin with no intrinsic value or expectation of financial return. Not financial advice. Be kind, every nerd here is somebody’s favorite nerd.</p>
         </div>
         <div className="flex flex-wrap gap-2 self-start">
           <a href={X_URL} target="_blank" rel="noopener noreferrer" className="chip py-2 text-white/80 hover:border-white/40 hover:text-white">

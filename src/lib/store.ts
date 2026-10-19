@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { Session, SolanaWallet } from '@supabase/supabase-js'
 import { photoPaths, storedFiles, thumbPath, type EncodedPhoto } from './photos'
 import { isConfigured, PHOTO_BUCKET, photoUrl, supabase } from './supabase'
-import type { AvatarSeed, LedgerEntry, PartnerRequest, Profile, Report, RevenueStatus, Settings, Social } from './types'
+import type { AvatarSeed, Leaderboard, LedgerEntry, MyPoints, PartnerRequest, Profile, Report, RevenueStatus, Settings, Social } from './types'
 import { connectWallet, needsSecondTap, oneStepSignIn, shortAddress, type ConnectedWallet, type WalletOption } from './wallets'
 
 /**
@@ -31,6 +31,7 @@ export interface State {
   isAdmin: boolean
   stats: { residents: number; verified: number; rejections: number }
   revenue: RevenueStatus | null
+  points: MyPoints | null
   offline: boolean // backend unreachable
 }
 
@@ -42,6 +43,9 @@ const DEFAULT_SETTINGS: Settings = {
   verifyLockAmount: 2000,
   rejectReward: 20,
   withdrawWaitDays: 14,
+  pointsReject: 10,
+  pointsAccept: 25,
+  pointsInvite: 50,
   extraRequestCost: 10,
   minWithdraw: 500,
   tokenMint: null,
@@ -67,6 +71,7 @@ let state: State = {
   isAdmin: false,
   stats: { residents: 0, verified: 0, rejections: 0 },
   revenue: null,
+  points: null,
   offline: false,
 }
 
@@ -115,6 +120,7 @@ function mapProfile(r: Row): Profile {
     accepts: r.accepts as number,
     verified: r.verified as boolean,
     verifiedAt: r.verified_at ? Date.parse(r.verified_at as string) : null,
+    inviteCode: (r.invite_code as string) ?? undefined,
   }
 }
 
@@ -148,6 +154,9 @@ const mapSettings = (r: Row): Settings => ({
   verifyLockAmount: (r.verify_lock_amount as number) ?? 2000,
   rejectReward: (r.reject_reward as number) ?? 20,
   withdrawWaitDays: (r.withdraw_wait_days as number) ?? 14,
+  pointsReject: (r.points_reject as number) ?? 10,
+  pointsAccept: (r.points_accept as number) ?? 25,
+  pointsInvite: (r.points_invite as number) ?? 50,
   extraRequestCost: r.extra_request_cost as number,
   minWithdraw: r.min_withdraw as number,
   tokenMint: (r.token_mint as string) || null,
@@ -263,6 +272,14 @@ async function loadMine() {
     }
   })
   if (state.phase === 2) await loadRevenue()
+  await loadPoints()
+}
+
+async function loadPoints() {
+  const { data } = await supabase.rpc('my_points')
+  if (!data || !state.session) return
+  const d = data as Row
+  set({ points: { total: Number(d.total), week: Number(d.week), invites: Number(d.invites), rejectionsWeek: Number(d.rejections_week), acceptsWeek: Number(d.accepts_week) } })
 }
 
 /** Refresh only the profiles touched by a request (cheap counter updates). */
@@ -312,7 +329,7 @@ async function applySession(session: Session | null) {
     startLive(id)
   } else {
     stopLive()
-    set({ requests: [], usage: { used: 0, bonus: 0 }, balance: 0, ledger: [], wallet: null, locked: 0, myContacts: [], contacts: {}, blocked: [], isAdmin: false })
+    set({ requests: [], usage: { used: 0, bonus: 0 }, balance: 0, ledger: [], wallet: null, locked: 0, points: null, myContacts: [], contacts: {}, blocked: [], isAdmin: false })
   }
 }
 
@@ -350,6 +367,49 @@ export function dailyInfo(s: State) {
 }
 
 /** When this resident can withdraw (verified + waiting period), or null if not verified. */
+/** $NERDY is live once the admin has set the mint. Until then the site runs on points only. */
+export const selectTokenLive = (s: State) => !!s.settings.tokenMint
+
+/** Where invite links point: the production site, not a preview URL. */
+declare const __SITE_URL__: string
+export const siteUrl = () => (typeof __SITE_URL__ === 'string' && __SITE_URL__) || window.location.origin
+export const inviteLink = (code: string) => `${siteUrl()}/?ref=${code}`
+
+const REF_KEY = 'nerdy:ref'
+/** Remember an invite code from the URL until the visitor creates a profile. */
+export function captureInvite() {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    if (ref && /^[0-9a-f]{8}$/.test(ref)) localStorage.setItem(REF_KEY, ref)
+  } catch {
+    /* storage blocked */
+  }
+}
+function pendingInvite(): string | null {
+  try {
+    return localStorage.getItem(REF_KEY)
+  } catch {
+    return null
+  }
+}
+
+export async function loadLeaderboard(): Promise<Leaderboard> {
+  const { data, error } = await supabase.rpc('leaderboard', { p_limit: 25 })
+  if (error) throw new Error(error.message)
+  const d = data as { rejected_week: { id: string; n: number }[]; points_week: { id: string; n: number }[]; points_all: { id: string; n: number }[] }
+  // Make sure every listed resident's profile is loaded.
+  const ids = [...new Set([...d.rejected_week, ...d.points_week, ...d.points_all].map((x) => x.id))].filter((id) => !state.profiles[id])
+  if (ids.length) {
+    const { data: rows } = await supabase.from('profiles').select('*').in('id', ids)
+    set((s) => {
+      const profiles = { ...s.profiles }
+      for (const r of rows ?? []) profiles[r.id] = mapProfile(r)
+      return { profiles }
+    })
+  }
+  return { rejectedWeek: d.rejected_week, pointsWeek: d.points_week, pointsAll: d.points_all }
+}
+
 export function withdrawOpensAt(s: State): number | null {
   const me = selectMe(s)
   if (!me?.verified || !me.verifiedAt) return null
@@ -498,8 +558,23 @@ export const api = {
       photos: paths,
       avatar: input.avatar,
     }
-    const res = existing ? await supabase.from('profiles').update(row).eq('id', me).select().single() : await supabase.from('profiles').insert(row).select().single()
+    let invitedBy: string | null = null
+    if (!existing) {
+      // Joined through a friend's invite link? Credit them (once this resident takes part).
+      const code = pendingInvite()
+      if (code) invitedBy = (await supabase.from('profiles').select('id').eq('invite_code', code).maybeSingle()).data?.id ?? null
+    }
+    const res = existing
+      ? await supabase.from('profiles').update(row).eq('id', me).select().single()
+      : await supabase.from('profiles').insert({ ...row, invited_by: invitedBy && invitedBy !== me ? invitedBy : null }).select().single()
     unwrap(res)
+    if (!existing) {
+      try {
+        localStorage.removeItem(REF_KEY)
+      } catch {
+        /* storage blocked */
+      }
+    }
     unwrap(await supabase.from('contacts').upsert({ user_id: me, socials, updated_at: new Date().toISOString() }).select())
 
     const removed = (existing?.photoPaths ?? []).filter((p) => !paths.includes(p))
@@ -606,6 +681,9 @@ export const api = {
             verify_lock_amount: s.verifyLockAmount,
             reject_reward: s.rejectReward,
             withdraw_wait_days: s.withdrawWaitDays,
+            points_reject: s.pointsReject,
+            points_accept: s.pointsAccept,
+            points_invite: s.pointsInvite,
             extra_request_cost: s.extraRequestCost,
             min_withdraw: s.minWithdraw,
             token_mint: s.tokenMint?.trim() || null,
@@ -653,6 +731,9 @@ export const api = {
     },
     async resolveReport(id: string) {
       unwrap(await supabase.from('reports').update({ resolved: true }).eq('id', id).select())
+    },
+    async adjustPoints(userId: string, amount: number) {
+      unwrap(await supabase.rpc('admin_adjust_points', { p_user: userId, p_amount: Math.round(amount) }))
     },
     async setVerified(userId: string, verified: boolean) {
       unwrap(await supabase.rpc('admin_set_verified', { p_user: userId, p_verified: verified }))

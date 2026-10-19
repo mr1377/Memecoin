@@ -23,15 +23,19 @@ create table public.settings (
   reject_reward int not null default 20 check (reject_reward >= 0),
   -- Withdrawals open this many days after getting verified.
   withdraw_wait_days int not null default 14 check (withdraw_wait_days between 0 and 365),
+  -- Points (before $NERDY launches; they convert after launch at a rate set then).
+  points_reject int not null default 10 check (points_reject between 0 and 10000),
+  points_accept int not null default 25 check (points_accept between 0 and 10000),
+  points_invite int not null default 50 check (points_invite between 0 and 10000),
   -- Phase 2 starts by itself once this many VERIFIED residents exist. It never goes back.
   real_user_goal int not null default 1000 check (real_user_goal between 1 and 1000000),
   phase2_at timestamptz,
+  -- $NERDY mint address. Empty = token not launched: the site runs on points only.
   token_mint text,
   token_decimals int not null default 6 check (token_decimals between 0 and 12),
   updated_at timestamptz not null default now()
 );
--- $NERDY on Solana (launched on Jupiter).
-insert into public.settings (id, token_mint) values (1, '8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx');
+insert into public.settings (id) values (1);
 
 create table public.admins (
   user_id uuid primary key references auth.users (id) on delete cascade
@@ -82,6 +86,9 @@ create table public.profiles (
   rejections_given int not null default 0,
   rejections_received int not null default 0,
   accepts int not null default 0,
+  -- Invite link code (nerdytown.space/?ref=<code>) and who invited this resident.
+  invite_code text not null unique default lower(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
+  invited_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now()
 );
 create index profiles_rejections_idx on public.profiles (rejections_received desc);
@@ -101,6 +108,8 @@ begin
       new.rejections_received := 0;
       new.accepts := 0;
       new.created_at := now();
+      new.invite_code := lower(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+      if new.invited_by = new.id then new.invited_by := null; end if;
     else
       new.id := old.id;
       new.verified := old.verified;
@@ -109,6 +118,8 @@ begin
       new.rejections_received := old.rejections_received;
       new.accepts := old.accepts;
       new.created_at := old.created_at;
+      new.invite_code := old.invite_code;
+      new.invited_by := old.invited_by;
     end if;
     foreach p in array new.photos loop
       if p not like new.id::text || '/%' or p like '%..%' then
@@ -236,6 +247,20 @@ create table public.locks (
 );
 create index locks_user_idx on public.locks (user_id);
 
+-- Points: earned by being rejected, being accepted and inviting friends. Written only
+-- by the database (one row per request / invitee, so nothing can be counted twice).
+create table public.points (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind text not null check (kind in ('rejected', 'accepted', 'invite', 'adjustment')),
+  amount int not null,
+  ref uuid,
+  created_at timestamptz not null default now()
+);
+create unique index points_once_idx on public.points (user_id, kind, ref) where ref is not null;
+create index points_recent_idx on public.points (created_at desc);
+create index points_user_idx on public.points (user_id);
+
 -- Platform revenue, pooled per calendar month (UTC) and shared among rejected residents.
 create table public.revenue (
   id uuid primary key default gen_random_uuid(),
@@ -272,6 +297,7 @@ alter table public.requests enable row level security;
 alter table public.daily_usage enable row level security;
 alter table public.ledger enable row level security;
 alter table public.locks enable row level security;
+alter table public.points enable row level security;
 alter table public.revenue enable row level security;
 alter table public.distributions enable row level security;
 
@@ -312,6 +338,8 @@ create policy ledger_read on public.ledger for select using (user_id = auth.uid(
 
 create policy locks_read on public.locks for select using (user_id = auth.uid() or public.is_admin());
 
+create policy points_read on public.points for select using (user_id = auth.uid() or public.is_admin());
+
 create policy revenue_read on public.revenue for select using (public.is_admin());
 create policy distributions_read on public.distributions for select using (true);
 
@@ -345,6 +373,14 @@ begin
     raise exception 'This request was already answered.';
   end if;
 
+  select * into s from public.settings where id = 1;
+  -- Points for the person who shot their shot: more for a match, some for an L.
+  if (case when p_status = 'accepted' then s.points_accept else s.points_reject end) > 0 then
+    insert into public.points (user_id, kind, amount, ref)
+    values (r.from_id, p_status, case when p_status = 'accepted' then s.points_accept else s.points_reject end, r.id)
+    on conflict do nothing;
+  end if;
+
   if p_status = 'accepted' then
     update public.profiles set accepts = accepts + 1 where id in (r.from_id, r.to_id);
   else
@@ -353,7 +389,6 @@ begin
     -- Only verified residents earn from rejections.
     if exists (select 1 from public.profiles where id = r.from_id and verified) then
       update public.requests set earns = true where id = r.id returning * into r;
-      select * into s from public.settings where id = 1;
       if s.phase = 1 and s.reject_reward > 0 then
         select name into responder from public.profiles where id = r.to_id;
         insert into public.ledger (user_id, kind, amount, note)
@@ -362,6 +397,20 @@ begin
     end if;
   end if;
   return r;
+end $$;
+
+-- A friend's invite counts once the invited resident actually takes part
+-- (sends or answers a request): the inviter gets points_invite, once.
+create or replace function public._invite_reward(me uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare inviter uuid; amount int;
+begin
+  select invited_by into inviter from public.profiles where id = me;
+  select points_invite into amount from public.settings where id = 1;
+  if inviter is not null and amount > 0 then
+    insert into public.points (user_id, kind, amount, ref) values (inviter, 'invite', amount, me)
+    on conflict do nothing;
+  end if;
 end $$;
 
 -- Anyone with a profile can send and answer requests.
@@ -565,6 +614,7 @@ begin
 
   insert into public.requests (from_id, to_id) values (me, p_to) returning * into r;
   update public.daily_usage set used = used + 1 where user_id = me and day = u.day;
+  perform public._invite_reward(me);
   return r;
 end $$;
 
@@ -575,6 +625,7 @@ begin
   perform public._require_profile(auth.uid());
   select * into r from public.requests where id = p_request for update;
   if r.id is null or r.to_id <> auth.uid() then raise exception 'Request not found.'; end if;
+  perform public._invite_reward(auth.uid());
   return public._resolve(p_request, case when p_accept then 'accepted' else 'rejected' end);
 end $$;
 
@@ -656,6 +707,36 @@ begin
   delete from auth.users where id = me;
 end $$;
 
+-- My points: total, this week (last 7 days), and how many invites counted.
+create or replace function public.my_points() returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'total', coalesce(sum(amount), 0),
+    'week', coalesce(sum(amount) filter (where created_at > now() - interval '7 days'), 0),
+    'invites', count(*) filter (where kind = 'invite'),
+    'rejections_week', (select count(*) from public.requests r where r.from_id = auth.uid() and r.status = 'rejected' and r.resolved_at > now() - interval '7 days'),
+    'accepts_week', (select count(*) from public.requests r where r.from_id = auth.uid() and r.status = 'accepted' and r.resolved_at > now() - interval '7 days')
+  ) from public.points where user_id = auth.uid()
+$$;
+
+-- Public leaderboards: most rejected and most points in the last 7 days, and all-time points.
+create or replace function public.leaderboard(p_limit int default 25) returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'rejected_week', (select coalesce(json_agg(x), '[]') from (
+      select r.from_id as id, count(*)::int as n from public.requests r
+      where r.status = 'rejected' and r.resolved_at > now() - interval '7 days'
+      group by r.from_id order by n desc, max(r.resolved_at) asc limit least(p_limit, 100)) x),
+    'points_week', (select coalesce(json_agg(x), '[]') from (
+      select p.user_id as id, sum(p.amount)::int as n from public.points p
+      where p.created_at > now() - interval '7 days'
+      group by p.user_id having sum(p.amount) > 0 order by n desc, min(p.created_at) asc limit least(p_limit, 100)) x),
+    'points_all', (select coalesce(json_agg(x), '[]') from (
+      select p.user_id as id, sum(p.amount)::int as n from public.points p
+      group by p.user_id having sum(p.amount) > 0 order by n desc, min(p.created_at) asc limit least(p_limit, 100)) x)
+  )
+$$;
+
 -- Real numbers for the homepage.
 create or replace function public.public_stats() returns json
 language sql stable security definer set search_path = public as $$
@@ -692,6 +773,15 @@ begin
   values (public._month(now()), 'admin', p_amount, left(coalesce(nullif(btrim(p_note), ''), 'Added by admin'), 120));
 end $$;
 
+-- Add or take away points (e.g. reset someone caught farming). Negative = take away.
+create or replace function public.admin_adjust_points(p_user uuid, p_amount int) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Admins only.'; end if;
+  if p_amount is null or p_amount = 0 then raise exception 'Enter a non-zero amount.'; end if;
+  insert into public.points (user_id, kind, amount) values (p_user, 'adjustment', p_amount);
+end $$;
+
 create or replace function public.admin_set_verified(p_user uuid, p_verified boolean) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -723,6 +813,7 @@ revoke execute on function public._resolve(uuid, text) from public, anon, authen
 revoke execute on function public._balance(uuid) from public, anon, authenticated;
 revoke execute on function public._wallet(uuid) from public, anon, authenticated;
 revoke execute on function public._require_profile(uuid) from public, anon, authenticated;
+revoke execute on function public._invite_reward(uuid) from public, anon, authenticated;
 revoke execute on function public._settings_phase() from public, anon, authenticated;
 revoke execute on function public._phase_on_verify() from public, anon, authenticated;
 revoke execute on function public._month_rejections(date) from public, anon, authenticated;
@@ -732,7 +823,7 @@ grant execute on function public.record_lock(uuid, text, bigint, text) to servic
 revoke execute on function public.delete_my_account() from anon;
 
 -- Clients can read only what RLS allows and never write counters directly.
-revoke insert, update, delete on public.requests, public.ledger, public.daily_usage, public.locks, public.revenue, public.distributions from anon, authenticated;
+revoke insert, update, delete on public.requests, public.ledger, public.daily_usage, public.locks, public.points, public.revenue, public.distributions from anon, authenticated;
 
 -- ---------------------------------------------------------------------
 -- Photo storage: public bucket, users write only to their own folder.

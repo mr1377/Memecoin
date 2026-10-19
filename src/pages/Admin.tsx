@@ -122,6 +122,9 @@ export default function Admin() {
             </div>
           </div>
           <NumField label="Free requests per day" value={form.freeDailyRequests} onChange={(v) => setForm({ ...form, freeDailyRequests: v })} />
+          <NumField label="Points per rejection" value={form.pointsReject} onChange={(v) => setForm({ ...form, pointsReject: Math.max(0, Math.round(v)) })} hint="For the resident who got rejected." />
+          <NumField label="Points per match" value={form.pointsAccept} onChange={(v) => setForm({ ...form, pointsAccept: Math.max(0, Math.round(v)) })} hint="For the resident whose request was accepted." />
+          <NumField label="Points per invited friend" value={form.pointsInvite} onChange={(v) => setForm({ ...form, pointsInvite: Math.max(0, Math.round(v)) })} hint="Counted once the friend sends or answers their first request." />
           <NumField
             label="Verified residents for Phase 2"
             value={form.realUserGoal}
@@ -135,8 +138,10 @@ export default function Admin() {
           <NumField label="Minimum withdrawal ($NERDY)" value={form.minWithdraw} onChange={(v) => setForm({ ...form, minWithdraw: v })} />
           <label className="block sm:col-span-2">
             <span className="label">$NERDY token mint address</span>
-            <input className="input font-mono text-sm" value={form.tokenMint ?? ''} onChange={(e) => setForm({ ...form, tokenMint: e.target.value })} placeholder="Paste the mint address after launch" />
-            <span className="mt-1 block text-xs text-white/40">Turns on verification (locking), shows a “Buy on Jupiter” button on the homepage and is needed for payouts. The payout wallet key lives in Vercel (TREASURY_SECRET_KEY), never here.</span>
+            <input className="input font-mono text-sm" value={form.tokenMint ?? ''} onChange={(e) => setForm({ ...form, tokenMint: e.target.value })} placeholder="Leave empty during points season" />
+            <span className="mt-1 block text-xs text-white/40">
+              {settings.tokenMint ? 'Token is live: verification, payouts and “Buy on Jupiter” are on.' : 'Points season: every token feature is hidden.'} Pasting the mint is the launch switch: it turns on verification (locking), “Buy on Jupiter” and payouts. The payout wallet key lives in Vercel (TREASURY_SECRET_KEY), never here.
+            </span>
           </label>
         </div>
         <button onClick={save} disabled={saving} className="btn-primary mt-6">
@@ -305,6 +310,17 @@ export default function Admin() {
               <Link to={`/u/${p.id}`} className="min-w-0 flex-1 truncate font-semibold hover:text-carrot">
                 {p.name} <span className="font-normal text-white/40">· {p.city}</span>
               </Link>
+              <button
+                onClick={() => {
+                  const v = prompt(`Add or remove points for ${p.name} (e.g. 100 or -500):`)
+                  const n = Math.round(Number(v))
+                  if (v && n) run(`p-${p.id}`, () => api.admin.adjustPoints(p.id, n), `${n > 0 ? '+' : ''}${n} points for ${p.name}`)
+                }}
+                disabled={!!busy}
+                className="chip py-2 hover:text-white"
+              >
+                ± Points
+              </button>
               <button
                 onClick={() => run(`v-${p.id}`, () => api.admin.setVerified(p.id, !p.verified), p.verified ? 'Verification removed' : 'Verified')}
                 disabled={!!busy}

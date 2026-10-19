@@ -5,8 +5,10 @@ import { MotionConfig } from 'framer-motion'
 import App from './App'
 import { ToastProvider } from './components/Toast'
 import './index.css'
+import { captureInvite } from './lib/store'
 import { registerMobileWalletAdapter } from './lib/wallets'
 
+captureInvite() // ?ref=<code> invite links
 registerMobileWalletAdapter().catch(() => {})
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

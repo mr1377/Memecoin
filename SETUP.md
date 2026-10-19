@@ -22,6 +22,7 @@ About 20 minutes. You need a free [Supabase](https://supabase.com) account, a fr
 > - `003_earn_when_verified.sql`: everyone can send / answer requests; only verified residents earn (20 $NERDY per rejection in Phase 1); withdrawals 14 days after verifying; lock 2000 $NERDY.
 > - `004_token_and_price.sql`: sets the $NERDY token address (`8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx`) and makes extra requests cost 10 $NERDY.
 > - `005_photo_storage.sql`: caps photo uploads at 400 KB (the site already shrinks photos to ~200 KB + a ~30 KB thumbnail) and lets admins delete the photos of removed users.
+> - `006_points_season.sql`: points season. Clears the token address (every token feature hides), adds points (+10 rejected, +25 accepted, +50 per invited friend), invite links and weekly leaderboards. Past rejections and matches are counted as points.
 >
 > 002 deletes all NPCs and their requests, recomputes everyone's counters from real interactions, clears old verified badges and puts the site back in Phase 1. Accounts made with email + password can't log in anymore (see step 5 to become admin again).
 
@@ -65,7 +66,7 @@ What users see on the login page:
 ## 5. Make yourself admin
 
 1. Log in on the live site (with your wallet, or Google/X/email) and create your profile.
-2. Copy your wallet address: tap it on your dashboard under **Your sign-in wallet** and it's copied in full. (Or copy it from your wallet app.)
+2. Copy your wallet address: tap it on your dashboard (**Your wallet**, at the bottom of the points card; after launch under **Your sign-in wallet**) and it's copied in full. (Or copy it from your wallet app.)
 3. Supabase → SQL Editor → run, with your address:
 
    ```sql
@@ -75,6 +76,20 @@ What users see on the login page:
    ```
 
 4. Reload the site. An **Admin panel** link appears on your dashboard.
+
+## 5b. Points season (now, before $NERDY launches)
+
+While **Admin → $NERDY token mint address** is empty, the site runs on points only:
+
+- No contract address, no buy buttons, no verification / lock, no balances or withdrawals. The site says **“$NERDY is coming soon. Start stacking points now.”**
+- **Points:** +10 when someone rejects your request, +25 when they accept, +50 for every friend who joins through your invite link *and* sends or answers their first request. Change the numbers in the Admin panel.
+- The dashboard says **“Points convert to $NERDY after launch.”** No rate is promised, so you decide it at launch.
+- **Leaderboard** (`/leaderboard`): most rejected and top points over the last 7 days, plus all-time points.
+- **Invite link** on every dashboard (`nerdytown.space/?ref=<code>`).
+- **Share my week:** a ready-made 1200×630 image (“1 time rejected this week… and still winning 🏆”) with **Post on X** (text + invite link) and **Download / Share image**.
+- **Farming:** points only count from requests (3 free a day) and from friends who actually take part. If someone farms with fake accounts, **Admin → Residents → ± Points** lets you remove their points.
+
+**Launch day:** paste the mint address in the Admin panel → Save. Token features (verify/lock, payouts, Buy on Jupiter) switch on at once. Before that, finish section 6, and decide how points convert (I can build the conversion when you have the rate). You may also want to set points to 0 then.
 
 ## 6. Payout wallet (needed before launch)
 
@@ -93,9 +108,9 @@ Verification and payouts both go through one platform wallet.
 ## 7. Launching $NERDY on Jupiter
 
 1. Go to **[jup.ag/studio](https://jup.ag/studio)**, connect your dev wallet and create the token (name *nerdy*, ticker *NERDY*, logo, and `https://nerdytown.space` as the website).
-2. The token address `8EE1qVncPvZcFReW9S3U1nuyGmJfoDXpSbAqon77jupx` is already set (schema / migration 004). To change it: **Admin panel → $NERDY token mint address** → **Save**. Having it set:
+2. Paste the **mint address (CA)** into **Admin panel → $NERDY token mint address** → **Save**. Until then the site runs in points season (5b). Having it set:
    - turns on verification (the **Verify · lock 2,000 $NERDY** button),
-   - shows “Live on Jupiter · Buy now” and **Buy $NERDY on Jupiter** on the homepage.
+   - shows **Buy $NERDY on Jupiter** on the homepage and in the footer.
 
 ## 8. Verification and earning (Phase 1)
 

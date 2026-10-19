@@ -1,8 +1,8 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, BadgeCheck, Check, Clock, Coins, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LockOpen, LogOut, Minus, PencilLine, Plus, Rocket, Send, ShieldCheck, Swords, Trash2, Wallet as WalletIcon, X } from 'lucide-react'
+import { ArrowUpRight, BadgeCheck, Check, Clock, Coins, Copy, Flame, GraduationCap, HeartHandshake, Inbox, Loader2, Lock, LockOpen, LogOut, Minus, PencilLine, Plus, Rocket, Send, Share2, ShieldCheck, Sparkles, Swords, Trash2, Trophy, UserPlus, Wallet as WalletIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AnimatedNumber from '../components/AnimatedNumber'
 import { confetti } from '../components/Confetti'
 import { Page } from '../components/Layout'
@@ -12,7 +12,8 @@ import { Scramble, SocialIcon } from '../components/SocialsReveal'
 import { displayHandle, socialUrl } from '../lib/socials'
 import ProfilePhoto from '../components/ProfilePhoto'
 import { useToast } from '../components/Toast'
-import { api, dailyInfo, selectMe, useStore, withdrawOpensAt } from '../lib/store'
+import ShareCard, { type ShareStats } from '../components/ShareCard'
+import { api, dailyInfo, inviteLink, selectMe, selectTokenLive, useStore, withdrawOpensAt } from '../lib/store'
 import { shortAddress, type WalletOption } from '../lib/wallets'
 import WalletPicker from '../components/WalletPicker'
 import type { PartnerRequest, Profile } from '../lib/types'
@@ -201,6 +202,73 @@ function VerifyCard({ onVerify, onUnlock }: { onVerify: () => void; onUnlock: ()
   )
 }
 
+/** Points season: what you've earned, how to earn more, your invite link and the brag card. */
+function PointsCard({ onShare }: { onShare: () => void }) {
+  const me = useStore(selectMe)
+  const pts = useStore((s) => s.points)
+  const wallet = useStore((s) => s.wallet)
+  const { pointsReject, pointsAccept, pointsInvite } = useStore((s) => s.settings)
+  const toast = useToast()
+  const link = me?.inviteCode ? inviteLink(me.inviteCode) : ''
+  const copy = () => navigator.clipboard?.writeText(link).then(() => toast('success', 'Invite link copied', `+${pointsInvite} points for every friend who joins and takes part.`))
+  return (
+    <section className="relative overflow-hidden rounded-3xl border-2 border-ink-950 bg-gradient-to-br from-lime via-carrot to-grape p-[2px] shadow-pop-lg">
+      <div className="rounded-[1.4rem] bg-ink-900/90 p-5 backdrop-blur sm:p-6">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono text-xs uppercase tracking-widest text-white/50">Your points</p>
+          <Link to="/leaderboard" className="chip py-1 text-[11px] hover:text-white">
+            <Trophy className="h-3 w-3" /> Leaderboard
+          </Link>
+        </div>
+        <p className="mt-2 font-display text-5xl font-extrabold">
+          <AnimatedNumber value={pts?.total ?? 0} />
+          <span className="ml-2 text-lg text-lime">pts</span>
+        </p>
+        <p className="mt-1 text-sm text-white/60">
+          <b className="text-white">+{(pts?.week ?? 0).toLocaleString()}</b> this week
+        </p>
+        <p className="mt-3 flex items-center gap-2 rounded-xl border border-carrot/30 bg-carrot/10 px-3 py-2 text-sm font-semibold text-carrot">
+          <Sparkles className="h-4 w-4 shrink-0" /> Points convert to $NERDY after launch.
+        </p>
+        <ul className="mt-4 grid grid-cols-3 gap-2 text-center">
+          {[
+            ['Rejected', `+${pointsReject}`, 'text-rizz'],
+            ['Accepted', `+${pointsAccept}`, 'text-lime'],
+            ['Friend joins', `+${pointsInvite}`, 'text-byte'],
+          ].map(([k, v, tone]) => (
+            <li key={k} className="rounded-xl border border-white/10 bg-white/[0.03] p-2">
+              <p className={clsx('font-display text-xl font-extrabold', tone)}>{v}</p>
+              <p className="text-[11px] text-white/50">{k}</p>
+            </li>
+          ))}
+        </ul>
+
+        <p className="label mt-5">Invite friends · {pts?.invites ?? 0} joined</p>
+        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-ink-950/60 p-1.5 pl-3">
+          <UserPlus className="h-4 w-4 shrink-0 text-byte" />
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-white/70">{link || '…'}</span>
+          <button onClick={copy} disabled={!link} className="btn-primary shrink-0 !px-3 !py-2 text-xs">
+            <Copy className="h-3.5 w-3.5" /> Copy
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11px] text-white/40">A friend counts once they join and send or answer their first request.</p>
+
+        <button onClick={onShare} className="btn-ghost mt-4 w-full">
+          <Share2 className="h-4 w-4" /> Share my week
+        </button>
+        {wallet && (
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-white/45">
+            <WalletIcon className="h-3.5 w-3.5" /> Your wallet:
+            <button onClick={() => navigator.clipboard?.writeText(wallet).then(() => toast('success', 'Wallet address copied', wallet))} title="Copy full address" className="font-mono hover:text-carrot">
+              {wallet.slice(0, 6)}…{wallet.slice(-6)}
+            </button>
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export default function Dashboard() {
   const s = useStore((x) => x)
   const me = useStore(selectMe)!
@@ -218,6 +286,17 @@ export default function Dashboard() {
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteText, setDeleteText] = useState('')
+  const tokenLive = useStore(selectTokenLive)
+  const [params, setParams] = useSearchParams()
+  const [shareOpen, setShareOpen] = useState(params.get('share') === '1')
+  const closeShare = () => {
+    setShareOpen(false)
+    if (params.has('share')) setParams({}, { replace: true })
+  }
+  const shareStats = useMemo<ShareStats>(
+    () => ({ rejectionsWeek: s.points?.rejectionsWeek ?? 0, acceptsWeek: s.points?.acceptsWeek ?? 0, pointsWeek: s.points?.week ?? 0, pointsTotal: s.points?.total ?? 0 }),
+    [s.points],
+  )
 
   const daily = dailyInfo(s)
   const { balance, wallet, ledger } = s
@@ -352,7 +431,18 @@ export default function Dashboard() {
       </div>
 
       {/* phase banner */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={clsx('mt-6 flex flex-col gap-3 rounded-3xl border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5', s.phase === 1 ? 'border-grape/30 bg-grape/10' : 'border-lime/30 bg-lime/10')}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={clsx('mt-6 flex flex-col gap-3 rounded-3xl border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5', !tokenLive ? 'border-carrot/30 bg-carrot/10' : s.phase === 1 ? 'border-grape/30 bg-grape/10' : 'border-lime/30 bg-lime/10')}>
+        {!tokenLive ? (
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-carrot/20 text-carrot">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold">$NERDY is coming soon. Start stacking points now.</p>
+              <p className="text-sm text-white/60">Every rejection, match and friend you invite earns points. Points convert to $NERDY after launch.</p>
+            </div>
+          </div>
+        ) : (
         <div className="flex items-center gap-3">
           <span className={clsx('grid h-11 w-11 shrink-0 place-items-center rounded-2xl', s.phase === 1 ? 'bg-grape/20 text-grape-300' : 'bg-lime/20 text-lime')}>
             {s.phase === 1 ? <Lock className="h-5 w-5" /> : <GraduationCap className="h-5 w-5" />}
@@ -366,6 +456,7 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
+        )}
         {s.isAdmin && (
           <Link to="/admin" className="chip shrink-0 self-start py-2 hover:text-white sm:self-auto">
             <Rocket className="h-3.5 w-3.5" /> Admin panel
@@ -491,7 +582,7 @@ export default function Dashboard() {
 
         {/* side column */}
         <div className="order-1 space-y-6 lg:order-2">
-          <VerifyCard onVerify={() => setVerifyOpen(true)} onUnlock={() => setUnlockOpen(true)} />
+          {tokenLive ? <VerifyCard onVerify={() => setVerifyOpen(true)} onUnlock={() => setUnlockOpen(true)} /> : <PointsCard onShare={() => setShareOpen(true)} />}
           {/* daily */}
           <section className="card p-5 sm:p-6">
             <div className="flex items-center gap-5">
@@ -506,6 +597,7 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
+            {tokenLive && (
             <div className={clsx('mt-5 rounded-2xl border p-4', s.phase === 2 ? 'border-carrot/30 bg-carrot/5' : 'border-white/10 bg-white/[0.02]')}>
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -526,9 +618,25 @@ export default function Dashboard() {
                 {s.phase === 1 ? <Lock className="h-4 w-4" /> : <Coins className="h-4 w-4" />} {s.phase === 1 ? 'Unlocks in Phase 2' : `Buy for ${(buyN * EXTRA_REQUEST_COST).toLocaleString()} $NERDY`}
               </button>
             </div>
+            )}
           </section>
 
+          {!tokenLive && (
+            <section className="card p-5">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/5 text-white/60">
+                  <ShieldCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-semibold">Coming with $NERDY</p>
+                  <p className="text-sm text-white/60">Verified badge, token payouts and the monthly revenue share.</p>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* wallet */}
+          {tokenLive && (
           <section className="relative overflow-hidden rounded-3xl border-2 border-ink-950 bg-gradient-to-br from-carrot via-rizz to-grape p-[2px] shadow-pop-lg">
             <div className="rounded-[1.4rem] bg-ink-900/90 p-5 backdrop-blur sm:p-6">
               <div className="flex items-center justify-between">
@@ -602,8 +710,16 @@ export default function Dashboard() {
               )}
             </div>
           </section>
+          )}
         </div>
       </div>
+
+      {/* share modal */}
+      <Modal open={shareOpen} onClose={closeShare} title="Share my week">
+        <h2 className="text-2xl font-bold">Brag about your week</h2>
+        <p className="mb-4 mt-1 text-sm text-white/60">Rejections are clout here. Post it, and friends who join through your link earn you points.</p>
+        {shareOpen && me && <ShareCard me={me} stats={shareStats} link={me.inviteCode ? inviteLink(me.inviteCode) : 'https://nerdytown.space'} />}
+      </Modal>
 
       {/* verify modal */}
       <Modal open={verifyOpen} onClose={() => setVerifyOpen(false)} title="Get verified">

@@ -44,6 +44,8 @@ export interface Profile {
   verified?: boolean
   /** When the current verification started (withdrawals open withdraw_wait_days later). */
   verifiedAt?: number | null
+  /** Invite link code: nerdytown.space/?ref=<code> */
+  inviteCode?: string
 }
 
 export type SocialPlatform = 'Instagram' | 'X' | 'Telegram' | 'Snapchat' | 'Discord' | 'TikTok' | 'WhatsApp' | 'Email'
@@ -90,10 +92,28 @@ export interface Settings {
   rejectReward: number
   /** Withdrawals open this many days after getting verified. */
   withdrawWaitDays: number
+  /** Points (points season, before $NERDY launches). */
+  pointsReject: number
+  pointsAccept: number
+  pointsInvite: number
   extraRequestCost: number
   minWithdraw: number
   tokenMint: string | null
   tokenDecimals: number
+}
+
+export interface MyPoints {
+  total: number
+  week: number
+  invites: number
+  rejectionsWeek: number
+  acceptsWeek: number
+}
+
+export interface Leaderboard {
+  rejectedWeek: { id: string; n: number }[]
+  pointsWeek: { id: string; n: number }[]
+  pointsAll: { id: string; n: number }[]
 }
 
 /** The monthly revenue-share pool (see supabase/schema.sql: revenue_status). */

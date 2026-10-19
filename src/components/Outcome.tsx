@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Coins, Flame } from 'lucide-react'
+import { Coins, Flame, Sparkles } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../lib/store'
@@ -25,6 +25,8 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
   const pool = useStore((s) => s.revenue?.pool ?? 0)
   const socials = useStore((s) => s.contacts[other.id])
   const reward = useStore((s) => s.settings.rejectReward)
+  const tokenLive = useStore((s) => !!s.settings.tokenMint)
+  const { pointsReject, pointsAccept } = useStore((s) => s.settings)
   // Only verified residents earn: Phase 1 a fixed reward, Phase 2 a share of the monthly pool.
   const paid = !!me.verified
   useEffect(() => {
@@ -62,6 +64,11 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
               {other.name.split(' ')[0]} said <span className="text-lime">yes!</span>
             </h2>
             <p className="mt-2 text-white/60">Their socials are yours. Slide in. Be cool. (You won’t be. That’s fine.)</p>
+            {pointsAccept > 0 && (
+              <p className="mx-auto mt-4 inline-flex items-center gap-1.5 rounded-full border border-lime/40 bg-lime/10 px-3 py-1 font-mono text-sm font-bold text-lime">
+                <Sparkles className="h-4 w-4" /> +{pointsAccept} points
+              </p>
+            )}
             {socials ? (
               <SocialsReveal socials={socials} className="mt-6 text-left" />
             ) : (
@@ -82,6 +89,13 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
                 </p>
                 <p className="text-xs text-white/50">Popularity (+1)</p>
               </div>
+              {!tokenLive ? (
+                <div className="rounded-2xl border border-lime/30 bg-lime/10 p-4">
+                  <Sparkles className="mx-auto h-5 w-5 text-lime" />
+                  <p className="mt-1 font-display text-3xl font-extrabold">+{pointsReject}</p>
+                  <p className="text-xs text-white/50">points · become $NERDY after launch</p>
+                </div>
+              ) : (
               <div className={`rounded-2xl border p-4 ${paid ? 'border-carrot/30 bg-carrot/10' : 'border-white/10 bg-white/5'}`}>
                 <Coins className={`mx-auto h-5 w-5 ${paid ? 'text-carrot' : 'text-white/30'}`} />
                 <p className="mt-1 font-display text-3xl font-extrabold">{paid ? (phase === 1 ? `+${reward}` : '+1') : '🔒'}</p>
@@ -95,6 +109,7 @@ export default function OutcomeModal({ open, onClose, status, other, me, phase }
                       : 'Get verified to earn a share'}
                 </p>
               </div>
+              )}
             </div>
             <div className="mt-5 flex items-center gap-3 rounded-2xl bg-white/5 p-3 text-left text-sm text-white/60">
               <NerdAvatar seed={MASCOT} bg={false} mood="happy" className="h-12 w-12 shrink-0" />

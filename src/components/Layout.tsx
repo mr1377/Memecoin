@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Compass, Home, LayoutDashboard, LogIn, UserRound } from 'lucide-react'
+import { Compass, Home, LayoutDashboard, LogIn, Trophy, UserRound } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { selectMe, useStore } from '../lib/store'
@@ -33,6 +33,7 @@ export function TopNav() {
         <Logo />
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
           <NavLink to="/explore" className={link}>Explore</NavLink>
+          <NavLink to="/leaderboard" className={link}>Leaderboard</NavLink>
           <NavLink to="/dashboard" className={link}>
             Dashboard
             {unread > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-rizz px-1 text-[10px] text-white">{unread}</span>}
@@ -65,12 +66,13 @@ export function BottomTabs() {
   const tabs = [
     { to: '/', label: 'Home', icon: Home, end: true },
     { to: '/explore', label: 'Explore', icon: Compass },
+    { to: '/leaderboard', label: 'Ranks', icon: Trophy },
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: unread },
     session ? { to: '/onboarding', label: 'Profile', icon: UserRound } : { to: '/login', label: 'Log in', icon: LogIn },
   ]
   return (
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-ink-900/85 backdrop-blur-xl md:hidden" aria-label="App">
-      <div className="mx-auto grid max-w-md grid-cols-4">
+      <div className="mx-auto grid max-w-md grid-cols-5">
         {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end} className="relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold">
             {({ isActive }) => (
